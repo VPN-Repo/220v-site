@@ -68,12 +68,12 @@ export async function getReferralUserStatuses(referrerUuids) {
   );
 }
 
-export async function markReferralUserPenalized(referrerUuid, { amount, comment, pointsBlocked }) {
+export async function recordReferralUserDebit(referrerUuid, { amount, comment, pointsBlocked, penalized }) {
   const now = new Date().toISOString();
   const key = refUserStatusKey(referrerUuid);
   const existing = await redis.hgetall(key);
   const update = {
-    penalized: "1",
+    penalized: penalized ? "1" : "0",
     updatedAt: now,
     lastDebitAt: now,
     lastDebitId: randomUUID(),
@@ -81,7 +81,7 @@ export async function markReferralUserPenalized(referrerUuid, { amount, comment,
     lastDebitComment: comment,
   };
 
-  if (!existing.penalizedAt) {
+  if (penalized && (!normalizeBool(existing.penalized) || !existing.penalizedAt)) {
     update.penalizedAt = now;
   }
 
@@ -93,6 +93,9 @@ export async function markReferralUserPenalized(referrerUuid, { amount, comment,
   }
 
   await redis.hset(key, update);
+  if (!penalized) {
+    await redis.hdel(key, "penalizedAt");
+  }
   return getReferralUserStatus(referrerUuid);
 }
 

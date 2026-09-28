@@ -34,7 +34,7 @@ import {
   grantReferralExchangePermission,
   isReferralExchangeAllowed,
   isReferralUserPointsBlocked,
-  markReferralUserPenalized,
+  recordReferralUserDebit,
   markReferralUserPointsBlocked,
   markReferralUserPointsUnblocked,
   revokeReferralExchangePermission,
@@ -209,7 +209,7 @@ function paymentTypeToLabel(type) {
 const RMW_META_CACHE_TTL_MS = 5 * 60 * 1000;
 const PROFILE_ENRICH_TIMEOUT_MS = 3_500;
 let rmwMetaCache = { fetchedAtMs: 0, payments: null, products: null };
-const rmwUserEmailCache = new Map();
+const rmwReferralUserCache = new Map();
 
 async function fetchRmwJsonList({ rmwUrl, rmwKey, path }) {
   const r = await fetchWithTimeout(`${rmwUrl}${path}`, {
@@ -265,12 +265,36 @@ function extractRmwUserEmail(payload) {
   return "";
 }
 
-async function fetchRmwUserEmail(userUuid) {
+function extractRmwSubscription(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  for (const key of ["user", "data", "response"]) {
+    const nested = extractRmwSubscription(payload[key]);
+    if (nested) return nested;
+  }
+
+  const plan = pickFirstString(
+    payload.plan,
+    displayPlanFromTariff(payload.tariff),
+    displayPlanFromTariff(payload.tariff_key),
+    payload.tariff,
+    payload.tariff_key,
+  );
+  const expiresAt =
+    safeDateParse(payload.expireAt) ||
+    safeDateParse(payload.expire_at) ||
+    safeDateParse(payload.expiresAt) ||
+    safeDateParse(payload.expires_at);
+  const status = pickFirstString(payload.tariff_state, payload.status);
+  if (!plan && !expiresAt && !status) return null;
+  return { plan: plan || null, expiresAt: expiresAt?.toISOString() || null, status: status || null };
+}
+
+async function fetchRmwReferralUser(userUuid, { fresh = false } = {}) {
   const uuid = assertValidUuid(userUuid);
-  const cached = rmwUserEmailCache.get(uuid);
+  const cached = rmwReferralUserCache.get(uuid);
   const now = Date.now();
-  if (cached && now - cached.fetchedAtMs < RMW_META_CACHE_TTL_MS) {
-    return cached.email;
+  if (!fresh && cached && now - cached.fetchedAtMs < RMW_META_CACHE_TTL_MS) {
+    return cached.profile;
   }
 
   const rmwUrl = rmwBaseUrl();
@@ -310,8 +334,9 @@ async function fetchRmwUserEmail(userUuid) {
   }
 
   const email = extractRmwUserEmail(data);
-  rmwUserEmailCache.set(uuid, { fetchedAtMs: now, email });
-  return email;
+  const profile = { email, subscription: extractRmwSubscription(data) };
+  rmwReferralUserCache.set(uuid, { fetchedAtMs: Date.now(), profile });
+  return profile;
 }
 
 async function fetchRmwReferralPoints(userUuid, { page, limit }) {
@@ -356,6 +381,48 @@ async function fetchRmwReferralPoints(userUuid, { page, limit }) {
   }
 
   return data;
+}
+
+async function countRmwSuccessfulPayments(userUuid) {
+  const uuid = assertValidUuid(userUuid);
+  const rmwUrl = rmwBaseUrl();
+  const rmwKey = rmwApiKey();
+  if (!rmwUrl || !rmwKey) {
+    const err = new Error("RMW not configured");
+    err.status = 500;
+    throw err;
+  }
+
+  const loadPage = async (page) => {
+    const qs = new URLSearchParams({ page: String(page), limit: "100" });
+    const response = await fetchWithTimeout(
+      `${rmwUrl}/v1/users/${encodeURIComponent(uuid)}/transactions?${qs}`,
+      { method: "GET", headers: { "Content-Type": "application/json", "X-Api-Key": rmwKey } },
+    );
+    const body = await response.json().catch(() => null);
+    if (!response.ok || !body || !Array.isArray(body.items)) {
+      const err = new Error("RMW transactions failed");
+      err.status = response.ok ? 502 : response.status;
+      throw err;
+    }
+    return body;
+  };
+
+  const first = await loadPage(1);
+  const pageCount = Number(first.total_pages);
+  if (!Number.isInteger(pageCount) || pageCount < 0 || pageCount > 1000) {
+    const err = new Error("Invalid RMW transactions pagination");
+    err.status = 502;
+    throw err;
+  }
+  let count = first.items.filter((item) => item?.status === "CONFIRMED").length;
+  for (let start = 2; start <= pageCount; start += 5) {
+    const pages = await Promise.all(
+      Array.from({ length: Math.min(5, pageCount - start + 1) }, (_, index) => loadPage(start + index)),
+    );
+    for (const page of pages) count += page.items.filter((item) => item?.status === "CONFIRMED").length;
+  }
+  return count;
 }
 
 async function debitRmwReferralPoints(userUuid, { amount, comment, force = false }) {
@@ -720,6 +787,10 @@ function displayPlanFromTariff(tariff) {
     "1month": "1 Месяц",
     "6month": "6 Месяцев",
     "12month": "12 Месяцев",
+    basic_1m: "Базовый — 1 месяц",
+    basic_6m: "Базовый — 6 месяцев",
+    pro_6m: "Pro — 6 месяцев",
+    premium_12m: "Premium — 12 месяцев",
   };
   return map[t] ?? null;
 }
@@ -1110,6 +1181,7 @@ app.post("/api/admin/referrals/exchange-requests/:id/approve", requireAdminToken
     const id = String(req.params.id || "").trim();
     if (!id) return clientError(res, 400, "Некорректный ID заявки");
     const operatorComment = readExchangeRequestComment(req.body, DEFAULT_EXCHANGE_APPROVE_COMMENT);
+    const force = req.body?.force === true;
 
     const result = await withReferralExchangeRequestLock(id, async () => {
       const request = await getReferralExchangeRequest(id);
@@ -1137,14 +1209,14 @@ app.post("/api/admin/referrals/exchange-requests/:id/approve", requireAdminToken
         rmwData = await exchangeRmwReferralPointsForDays(request.referrerUuid, {
           points: request.points,
           days,
-          force: false,
+          force,
         });
         responseField = "exchange";
       } else {
         rmwData = await debitRmwReferralPoints(request.referrerUuid, {
           amount: request.points,
           comment: operatorComment,
-          force: false,
+          force,
         });
         responseField = "debit";
       }
@@ -1201,15 +1273,27 @@ app.post("/api/admin/referrals/exchange-requests/:id/reject", requireAdminToken,
 app.get("/api/admin/referrals/users/:uuid", requireAdminToken, async (req, res) => {
   try {
     const uuid = assertValidUuid(req.params.uuid);
-    const email = await fetchRmwUserEmail(uuid);
+    const { email, subscription } = await fetchRmwReferralUser(uuid, { fresh: req.query.refresh === "1" });
     const status = await getReferralUserStatus(uuid);
-    return res.json({ uuid, email: email || null, status });
+    return res.json({ uuid, email: email || null, status, subscription });
   } catch (err) {
     if (err?.message === "Invalid user UUID") {
       return clientError(res, 400, "Некорректный UUID пользователя");
     }
     const status = err.status || 502;
-    return clientError(res, status, "Не удалось загрузить email пользователя из RMW");
+    return clientError(res, status, "Не удалось загрузить данные пользователя из RMW");
+  }
+});
+
+app.get("/api/admin/referrals/users/:uuid/successful-payments", requireAdminToken, async (req, res) => {
+  try {
+    const count = await countRmwSuccessfulPayments(req.params.uuid);
+    return res.json({ count });
+  } catch (err) {
+    if (err?.message === "Invalid user UUID") {
+      return clientError(res, 400, "Некорректный UUID пользователя");
+    }
+    return clientError(res, err.status || 502, "Не удалось загрузить количество успешных оплат");
   }
 });
 
@@ -1265,9 +1349,13 @@ app.post("/api/admin/referrals/users/:uuid/points/debit", requireAdminToken, asy
     const amount = Number(amountRaw);
     const comment = typeof req.body?.comment === "string" ? req.body.comment.trim() : "";
     const pointsBlocked = req.body?.pointsBlocked === true;
+    const penalized = req.body?.penalized === true;
     const debitRequested = amountProvided || Boolean(comment);
 
     if (!debitRequested) {
+      if (penalized) {
+        return clientError(res, 400, "Для штрафа укажите количество баллов и причину списания");
+      }
       const status = pointsBlocked
         ? await markReferralUserPointsBlocked(uuid)
         : await markReferralUserPointsUnblocked(uuid);
@@ -1282,7 +1370,7 @@ app.post("/api/admin/referrals/users/:uuid/points/debit", requireAdminToken, asy
     }
 
     const data = await debitRmwReferralPoints(uuid, { amount, comment, force: req.body?.force === true });
-    const status = await markReferralUserPenalized(uuid, { amount, comment, pointsBlocked });
+    const status = await recordReferralUserDebit(uuid, { amount, comment, pointsBlocked, penalized });
     return res.json({ ...data, status });
   } catch (err) {
     if (err?.message === "Invalid user UUID") {

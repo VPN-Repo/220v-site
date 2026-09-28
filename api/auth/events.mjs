@@ -10,6 +10,7 @@ import {
 import { redis } from "../redis.mjs";
 import { base64url, emailHash, maskEmail } from "./crypto.mjs";
 import { KEY_PREFIXES, RL_PREFIXES, SCAN_PATTERNS } from "./keys.mjs";
+import { buildDailyAuthSnapshot } from "./dailyStats.mjs";
 
 function parseJsonObject(raw) {
   if (!raw || typeof raw !== "string") return null;
@@ -128,6 +129,7 @@ export async function buildRedisAuthSnapshot() {
     typeStats,
     ipStats,
     emailStats,
+    dailyAuth,
   ] = await Promise.all([
     scanRedisKeys(SCAN_PATTERNS.otp),
     scanRedisKeys(SCAN_PATTERNS.otpCooldown),
@@ -140,6 +142,7 @@ export async function buildRedisAuthSnapshot() {
     redis.hgetall(AUTH_STATS_TYPE_KEY),
     redis.hgetall(AUTH_STATS_IP_KEY),
     redis.hgetall(AUTH_STATS_EMAIL_KEY),
+    buildDailyAuthSnapshot(),
   ]);
 
   const activeOtpKeys = otpKeys.filter((key) => !key.includes(":cooldown:"));
@@ -242,6 +245,7 @@ export async function buildRedisAuthSnapshot() {
       byIp: normalizeCounterEntries(ipStats),
       byEmailHash: normalizeCounterEntries(emailStats),
     },
+    dailyAuth,
     events: rawEvents.map((raw) => parseJsonObject(raw)).filter(Boolean),
   };
 }

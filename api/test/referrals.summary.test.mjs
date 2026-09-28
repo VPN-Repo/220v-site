@@ -462,8 +462,13 @@ describe("referral admin summary", () => {
     assert.ok(warning);
     assert.equal(warning.severity, "critical");
     assert.deepEqual(warning.evidence.matches[0].signals, { ua: true, fp: true, ip: false });
-    assert.equal(warning.evidence.matches[0].referredEmailHashA, "email-1");
-    assert.equal(warning.evidence.matches[0].referredEmailHashB, "email-2");
+    assert.deepEqual(
+      new Set([
+        warning.evidence.matches[0].referredEmailHashA,
+        warning.evidence.matches[0].referredEmailHashB,
+      ]),
+      new Set(["email-1", "email-2"]),
+    );
   });
 
   it("marks two registrations sharing UA and IP as high", async () => {
@@ -546,12 +551,20 @@ describe("referral admin summary", () => {
     assert.equal(limited.body.totals.events, 1);
   });
 
-  it("returns referrer email from RMW by UUID", async () => {
+  it("returns a fresh referrer tariff and expiry from RMW by UUID", async () => {
+    let lookupCount = 0;
     globalThis.fetch = async (url, options) => {
       assert.equal(url, `${process.env.RMW_API_URL}/v1/users/${REF_A}`);
       assert.equal(options.headers["X-Api-Key"], process.env.RMW_API_KEY);
+      lookupCount += 1;
       return new Response(
-        JSON.stringify({ user: { uuid: REF_A, email: "referrer@example.com" } }),
+        JSON.stringify({
+          uuid: REF_A,
+          email: "referrer@example.com",
+          tariff_key: lookupCount === 1 ? "premium_12m" : "basic_1m",
+          tariff_state: lookupCount === 1 ? "active" : "expired",
+          expire_at: lookupCount === 1 ? "2030-01-01T00:00:00Z" : "2020-01-01T00:00:00Z",
+        }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     };
@@ -563,8 +576,47 @@ describe("referral admin summary", () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.uuid, REF_A);
     assert.equal(res.body.email, "referrer@example.com");
+    assert.deepEqual(res.body.subscription, {
+      plan: "Premium — 12 месяцев",
+      expiresAt: "2030-01-01T00:00:00.000Z",
+      status: "active",
+    });
     assert.equal(res.body.status.penalized, false);
     assert.equal(res.body.status.pointsBlocked, false);
+
+    const refreshed = await request(app)
+      .get(`/api/admin/referrals/users/${REF_A}?refresh=1`)
+      .set("X-Admin-Token", "admin-test-token");
+    assert.equal(refreshed.status, 200);
+    assert.equal(refreshed.body.subscription.status, "expired");
+    assert.equal(refreshed.body.subscription.expiresAt, "2020-01-01T00:00:00.000Z");
+    assert.equal(lookupCount, 2);
+  });
+
+  it("counts confirmed payments across all transaction pages", async () => {
+    const fetchedPages = [];
+    globalThis.fetch = async (url, options) => {
+      assert.equal(options.headers["X-Api-Key"], process.env.RMW_API_KEY);
+      const parsed = new URL(url);
+      assert.equal(parsed.pathname, `/v1/users/${REF_A}/transactions`);
+      assert.equal(parsed.searchParams.get("limit"), "100");
+      const page = Number(parsed.searchParams.get("page"));
+      fetchedPages.push(page);
+      return new Response(JSON.stringify({
+        items: page === 1
+          ? Array.from({ length: 100 }, (_, index) => ({ status: index === 0 ? "CONFIRMED" : "CANCELED" }))
+          : [{ status: "CONFIRMED" }, { status: "FAILED" }],
+        page,
+        total_pages: 2,
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+
+    const res = await request(app)
+      .get(`/api/admin/referrals/users/${REF_A}/successful-payments`)
+      .set("X-Admin-Token", "admin-test-token");
+    assert.equal(res.status, 200);
+    assert.equal(res.body.count, 2);
+    assert.deepEqual(fetchedPages, [1, 2]);
   });
 
   it("returns referrer points history from RMW by UUID", async () => {
@@ -700,7 +752,7 @@ describe("referral admin summary", () => {
     const res = await request(app)
       .post(`/api/admin/referrals/users/${REF_A}/points/debit`)
       .set("X-Admin-Token", "admin-test-token")
-      .send({ amount: 7, comment: "fraud adjustment", force: true, pointsBlocked: true });
+      .send({ amount: 7, comment: "fraud adjustment", force: true, pointsBlocked: true, penalized: true });
 
     assert.equal(res.status, 200);
     assert.equal(res.body.balance, 8);
@@ -713,6 +765,97 @@ describe("referral admin summary", () => {
     const refA = summary.body.referrers.find((referrer) => referrer.referrerUuid === REF_A);
     assert.equal(refA.status.penalized, true);
     assert.equal(refA.status.pointsBlocked, true);
+  });
+
+  for (const [label, pointsBlocked, penalized] of [
+    ["ordinary", false, false],
+    ["penalty", false, true],
+    ["blocked", true, false],
+    ["blocked penalty", true, true],
+  ]) {
+    it(`applies ${label} debit flags independently and records the reason`, async () => {
+      let rmwCalls = 0;
+      globalThis.fetch = async (_url, options) => {
+        rmwCalls += 1;
+        assert.deepEqual(JSON.parse(options.body), { amount: 7, comment: "ручная корректировка", force: true });
+        return new Response(JSON.stringify({ balance: 8, transaction: { id: 2, reason: "manual_debit", meta: { comment: "ручная корректировка" } } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      };
+
+      const res = await request(app)
+        .post(`/api/admin/referrals/users/${REF_A}/points/debit`)
+        .set("X-Admin-Token", "admin-test-token")
+        .send({ amount: 7, comment: "ручная корректировка", force: true, pointsBlocked, penalized });
+
+      assert.equal(res.status, 200);
+      assert.equal(rmwCalls, 1);
+      assert.equal(res.body.status.penalized, penalized);
+      assert.equal(res.body.status.pointsBlocked, pointsBlocked);
+      assert.equal(Boolean(res.body.status.penalizedAt), penalized);
+      assert.equal(res.body.status.lastDebitAmount, 7);
+      assert.equal(res.body.status.lastDebitComment, "ручная корректировка");
+      assert.equal(res.body.transaction.meta.comment, "ручная корректировка");
+    });
+  }
+
+  it("clears an existing penalty on an ordinary debit and dates a later penalty anew", async () => {
+    globalThis.fetch = async () => new Response(JSON.stringify({ balance: 8 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+    const debit = (body) => request(app)
+      .post(`/api/admin/referrals/users/${REF_A}/points/debit`)
+      .set("X-Admin-Token", "admin-test-token")
+      .send({ amount: 1, comment: "корректировка", ...body });
+
+    const first = await debit({ penalized: true, pointsBlocked: true });
+    assert.equal(first.status, 200);
+    const firstPenaltyAt = first.body.status.penalizedAt;
+    const repeated = await debit({ penalized: true });
+    assert.equal(repeated.body.status.penalizedAt, firstPenaltyAt);
+
+    const ordinary = await debit({});
+    assert.equal(ordinary.status, 200);
+    assert.equal(ordinary.body.status.penalized, false);
+    assert.equal(ordinary.body.status.penalizedAt, null);
+    assert.equal(ordinary.body.status.pointsBlocked, true);
+    assert.equal(ordinary.body.status.lastDebitComment, "корректировка");
+
+    const next = await debit({ penalized: true });
+    assert.equal(next.body.status.penalized, true);
+    assert.ok(next.body.status.penalizedAt);
+    assert.equal(next.body.status.pointsBlocked, true);
+  });
+
+  it("leaves referral status unchanged when RMW rejects the debit", async () => {
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: "RMW error" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+    const before = await blockReferralPoints(REF_A);
+    assert.equal(before.status, 200);
+
+    const res = await request(app)
+      .post(`/api/admin/referrals/users/${REF_A}/points/debit`)
+      .set("X-Admin-Token", "admin-test-token")
+      .send({ amount: 1, comment: "корректировка", penalized: true });
+
+    assert.equal(res.status, 400);
+    const status = await redis.hgetall(refUserStatusKey(REF_A));
+    assert.equal(status.penalized, undefined);
+    assert.equal(status.pointsBlocked, "1");
+    assert.equal(status.lastDebitComment, undefined);
+  });
+
+  it("requires an amount and reason before assigning a penalty", async () => {
+    const res = await request(app)
+      .post(`/api/admin/referrals/users/${REF_A}/points/debit`)
+      .set("X-Admin-Token", "admin-test-token")
+      .send({ penalized: true, pointsBlocked: true });
+    assert.equal(res.status, 400);
+    assert.deepEqual(await redis.hgetall(refUserStatusKey(REF_A)), {});
   });
 
   it("blocks referral points without calling RMW when debit fields are empty", async () => {
@@ -1150,6 +1293,58 @@ describe("referral admin summary", () => {
       .set("X-Admin-Token", "admin-test-token");
     assert.equal(pendingRes.body.items.length, 0);
   });
+
+  for (const type of ["days", "prize"]) {
+    for (const [label, forceValue, expectedForce] of [
+      ["true", true, true],
+      ["false", false, false],
+      ["string true", "true", false],
+      ["omitted", undefined, false],
+    ]) {
+      it(`passes force=${label} to RMW when approving a ${type} request`, async () => {
+        mockReferralPointsFetch({ balance: 1000 });
+        const agent = await createSessionAgent(REF_A);
+        const createRes = await agent
+          .post("/api/me/referrals/exchange-requests")
+          .send(type === "days"
+            ? { type, days: 2, points: 20 }
+            : { type, prizeId: "phone-card-500", prizeTitle: "500 руб на баланс телефона или карту", details: "+79990000000", points: 500 });
+        assert.equal(createRes.status, 201);
+
+        let rmwCalls = 0;
+        globalThis.fetch = async (url, options) => {
+          rmwCalls += 1;
+          assert.equal(
+            url,
+            `${process.env.RMW_API_URL}/v1/users/${REF_A}/referral-points/${type === "days" ? "exchange-days" : "debit"}`,
+          );
+          const body = JSON.parse(options.body);
+          if (type === "days") {
+            assert.deepEqual(body, { points: 20, days: 2, force: expectedForce });
+          } else {
+            assert.deepEqual(body, {
+              amount: 500,
+              comment: "выдано оператором",
+              ...(expectedForce ? { force: true } : {}),
+            });
+          }
+          return new Response(JSON.stringify({ balance: 500, transaction: { id: 56 } }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        };
+
+        const approveRes = await request(app)
+          .post(`/api/admin/referrals/exchange-requests/${createRes.body.request.id}/approve`)
+          .set("X-Admin-Token", "admin-test-token")
+          .send({ comment: "выдано оператором", ...(forceValue === undefined ? {} : { force: forceValue }) });
+
+        assert.equal(approveRes.status, 200);
+        assert.equal(approveRes.body.request.status, "approved");
+        assert.equal(rmwCalls, 1);
+      });
+    }
+  }
 
   it("keeps day exchange request pending when RMW exchange-days fails", async () => {
     mockReferralPointsFetch({ balance: 100 });

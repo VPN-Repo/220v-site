@@ -134,6 +134,11 @@ type ReferrerUserLookup = {
   loading: boolean;
   email?: string | null;
   status?: ReferralUserStatus;
+  subscription?: {
+    plan: string | null;
+    expiresAt: string | null;
+    status: string | null;
+  } | null;
   error?: string;
 };
 
@@ -354,6 +359,18 @@ function formatDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleString("ru-RU");
+}
+
+function formatSubscriptionStatus(subscription?: ReferrerUserLookup["subscription"]): string {
+  if (!subscription) return "—";
+  const expiresAtMs = subscription.expiresAt ? Date.parse(subscription.expiresAt) : Number.NaN;
+  if (subscription.status?.toUpperCase() === "EXPIRED" || (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now())) {
+    return "Истёк";
+  }
+  if (subscription.status?.toUpperCase() === "ACTIVE" || (Number.isFinite(expiresAtMs) && expiresAtMs > Date.now())) {
+    return "Активен";
+  }
+  return "—";
 }
 
 function asErrorMessage(error: unknown) {
@@ -982,18 +999,23 @@ function OtherEventsSpoiler({ events }: { events: ReferralEvent[] }) {
   );
 }
 
-function ReferrerTable({
+function ReferralUserWorkspace({
   items,
   eventType,
   token,
   filtersPanel,
+  showReferrers,
+  renderPage,
 }: {
   items: ReferrerRisk[];
   eventType: string;
   token: string;
   filtersPanel: ReactNode;
+  showReferrers: boolean;
+  renderPage: (actions: { openHistory: (uuid: string) => void; openDebit: (uuid: string) => void }) => ReactNode;
 }) {
   const [userLookups, setUserLookups] = useState<Record<string, ReferrerUserLookup>>({});
+  const userLookupRequestIds = useRef<Record<string, number>>({});
   const [balanceLookups, setBalanceLookups] = useState<Record<string, ReferrerBalanceLookup>>({});
   const [referredEmailLookups, setReferredEmailLookups] = useState<Record<string, ReferredEmailLookup>>({});
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -1002,11 +1024,19 @@ function ReferrerTable({
   const [historyData, setHistoryData] = useState<ReferralPointsResponse | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const historyRequestId = useRef(0);
+  const [successfulPayments, setSuccessfulPayments] = useState<{ loading: boolean; count: number | null; error: string }>({
+    loading: false,
+    count: null,
+    error: "",
+  });
+  const paymentCountRequestId = useRef(0);
   const [debitOpen, setDebitOpen] = useState(false);
   const [debitUuid, setDebitUuid] = useState("");
   const [debitAmount, setDebitAmount] = useState("");
   const [debitComment, setDebitComment] = useState("");
   const [debitPointsBlocked, setDebitPointsBlocked] = useState(false);
+  const [debitPenalized, setDebitPenalized] = useState(false);
   const [debitLoading, setDebitLoading] = useState(false);
   const [debitError, setDebitError] = useState("");
   const [permissionOpen, setPermissionOpen] = useState(false);
@@ -1042,13 +1072,18 @@ function ReferrerTable({
   }, [filtersOpen]);
 
   const loadUserEmail = useCallback(
-    async (uuid: string) => {
+    async (uuid: string, refresh = false) => {
       const existing = userLookups[uuid];
-      if (existing?.loading || existing?.email !== undefined) return;
+      if (!refresh && (existing?.loading || existing?.email !== undefined)) return;
+      const requestId = (userLookupRequestIds.current[uuid] || 0) + 1;
+      userLookupRequestIds.current[uuid] = requestId;
 
-      setUserLookups((prev) => ({ ...prev, [uuid]: { loading: true } }));
+      setUserLookups((prev) => ({
+        ...prev,
+        [uuid]: { ...(prev[uuid] || {}), loading: true, error: undefined },
+      }));
       try {
-        const res = await fetch(`${apiBase}/admin/referrals/users/${encodeURIComponent(uuid)}`, {
+        const res = await fetch(`${apiBase}/admin/referrals/users/${encodeURIComponent(uuid)}${refresh ? "?refresh=1" : ""}`, {
           headers: { "X-Admin-Token": token.trim() },
           credentials: "include",
         });
@@ -1068,9 +1103,20 @@ function ReferrerTable({
           body && typeof body === "object" && "status" in body && body.status && typeof body.status === "object"
             ? (body.status as ReferralUserStatus)
             : undefined;
-        setUserLookups((prev) => ({ ...prev, [uuid]: { loading: false, email, status } }));
+        const subscription =
+          body && typeof body === "object" && "subscription" in body && body.subscription && typeof body.subscription === "object"
+            ? (body.subscription as ReferrerUserLookup["subscription"])
+            : null;
+        if (userLookupRequestIds.current[uuid] === requestId) {
+          setUserLookups((prev) => ({ ...prev, [uuid]: { loading: false, email, status, subscription } }));
+        }
       } catch (err) {
-        setUserLookups((prev) => ({ ...prev, [uuid]: { loading: false, error: asErrorMessage(err) } }));
+        if (userLookupRequestIds.current[uuid] === requestId) {
+          setUserLookups((prev) => ({
+            ...prev,
+            [uuid]: { ...(prev[uuid] || {}), loading: false, subscription: null, error: asErrorMessage(err) },
+          }));
+        }
       }
     },
     [token, userLookups],
@@ -1198,6 +1244,7 @@ function ReferrerTable({
 
   const loadReferralHistory = useCallback(
     async (uuid: string, pageNum = 1) => {
+      const requestId = ++historyRequestId.current;
       setHistoryLoading(true);
       setHistoryError("");
       try {
@@ -1220,24 +1267,49 @@ function ReferrerTable({
               : `Ошибка ${res.status}`;
           throw new Error(message);
         }
-        setHistoryData(body as ReferralPointsResponse);
+        if (requestId === historyRequestId.current) setHistoryData(body as ReferralPointsResponse);
       } catch (err) {
-        setHistoryError(asErrorMessage(err));
+        if (requestId === historyRequestId.current) setHistoryError(asErrorMessage(err));
       } finally {
-        setHistoryLoading(false);
+        if (requestId === historyRequestId.current) setHistoryLoading(false);
       }
     },
     [token],
   );
+
+  const loadSuccessfulPayments = useCallback(async (uuid: string) => {
+    const requestId = ++paymentCountRequestId.current;
+    setSuccessfulPayments({ loading: true, count: null, error: "" });
+    try {
+      const res = await fetch(`${apiBase}/admin/referrals/users/${encodeURIComponent(uuid)}/successful-payments`, {
+        headers: { "X-Admin-Token": token.trim() },
+        credentials: "include",
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !Number.isInteger(body?.count) || body.count < 0) {
+        const message = typeof body?.error === "string" ? body.error : `Ошибка ${res.status}`;
+        throw new Error(message);
+      }
+      if (requestId === paymentCountRequestId.current) {
+        setSuccessfulPayments({ loading: false, count: body.count, error: "" });
+      }
+    } catch (err) {
+      if (requestId === paymentCountRequestId.current) {
+        setSuccessfulPayments({ loading: false, count: null, error: asErrorMessage(err) });
+      }
+    }
+  }, [token]);
 
   const openReferralHistory = useCallback(
     (uuid: string) => {
       setHistoryUuid(uuid);
       setHistoryData(null);
       setHistoryOpen(true);
+      void loadUserEmail(uuid, true);
       void loadReferralHistory(uuid, 1);
+      void loadSuccessfulPayments(uuid);
     },
-    [loadReferralHistory],
+    [loadReferralHistory, loadSuccessfulPayments, loadUserEmail],
   );
 
   const applyStatusUpdate = useCallback((uuid: string, status: ReferralUserStatus) => {
@@ -1253,9 +1325,11 @@ function ReferrerTable({
     setDebitAmount("");
     setDebitComment("");
     setDebitPointsBlocked(false);
+    setDebitPenalized(false);
     setDebitError("");
     setDebitOpen(true);
-  }, []);
+    void loadUserEmail(uuid);
+  }, [loadUserEmail]);
 
   const openPermissionDialog = useCallback((uuid: string, status?: ReferralUserStatus | null) => {
     setPermissionUuid(uuid);
@@ -1361,6 +1435,10 @@ function ReferrerTable({
       const comment = debitComment.trim();
       const statusOnly = !amountText && !comment;
 
+      if (statusOnly && debitPenalized) {
+        setDebitError("Для штрафа укажите количество баллов и причину списания");
+        return;
+      }
       if (!statusOnly && (!Number.isInteger(amount) || amount <= 0)) {
         setDebitError("Укажите положительное целое число баллов");
         return;
@@ -1383,7 +1461,7 @@ function ReferrerTable({
           body: JSON.stringify(
             statusOnly
               ? { pointsBlocked: debitPointsBlocked }
-              : { amount, comment, force: true, pointsBlocked: debitPointsBlocked },
+              : { amount, comment, force: true, pointsBlocked: debitPointsBlocked, penalized: debitPenalized },
           ),
         });
         const body = await res.json().catch(() => null);
@@ -1425,6 +1503,7 @@ function ReferrerTable({
       debitAmount,
       debitComment,
       debitPointsBlocked,
+      debitPenalized,
       debitUuid,
       historyData?.page,
       historyUuid,
@@ -1439,6 +1518,8 @@ function ReferrerTable({
 
   return (
     <>
+      {renderPage({ openHistory: openReferralHistory, openDebit: openDebitDialog })}
+      {showReferrers ? (
       <section className="rounded-2xl bg-card p-4 ring-1 ring-border">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <div className="mr-auto flex min-w-0 items-center gap-2">
@@ -1676,7 +1757,7 @@ function ReferrerTable({
                               className="rounded-lg bg-destructive px-3 py-2 text-xs font-semibold text-destructive-foreground transition hover:bg-destructive/90"
                               onClick={() => openDebitDialog(item.referrerUuid)}
                             >
-                              Списать баллы
+                              Списать
                             </button>
                             <button
                               type="button"
@@ -1711,6 +1792,7 @@ function ReferrerTable({
           </Table>
         )}
       </section>
+      ) : null}
 
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
         <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-5xl">
@@ -1731,6 +1813,16 @@ function ReferrerTable({
                     Email: <CopyableText value={selectedUserLookup.email} label="Email" />
                   </p>
                 ) : null}
+                <p>Тариф: {selectedUserLookup?.loading ? "Загрузка..." : selectedUserLookup?.subscription?.plan || "—"}</p>
+                <p>Статус тарифа: {selectedUserLookup?.loading ? "Загрузка..." : formatSubscriptionStatus(selectedUserLookup?.subscription)}</p>
+                <p>Дата окончания: {selectedUserLookup?.loading ? "Загрузка..." : formatDate(selectedUserLookup?.subscription?.expiresAt)}</p>
+                <p>Успешных оплат: {successfulPayments.loading ? "Загрузка..." : successfulPayments.count ?? "—"}</p>
+                {selectedUserLookup?.error ? (
+                  <p role="alert">Не удалось загрузить тариф: {selectedUserLookup.error}</p>
+                ) : null}
+                {successfulPayments.error ? (
+                  <p role="alert">Не удалось загрузить оплаты: {successfulPayments.error}</p>
+                ) : null}
               </div>
             </DialogDescription>
           </DialogHeader>
@@ -1739,14 +1831,15 @@ function ReferrerTable({
             <p className="text-sm text-muted-foreground">Загрузка истории...</p>
           ) : historyError ? (
             <p className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{historyError}</p>
-          ) : !historyData || historyData.items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">История рефералов пустая</p>
-          ) : (
+          ) : !historyData ? null : (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
                 <Badge variant="secondary">Баланс: {historyData.balance ?? 0}</Badge>
                 <Badge variant="secondary">Всего записей: {historyData.total ?? historyData.items.length}</Badge>
               </div>
+              {historyData.items.length === 0 ? (
+                <p className="text-sm text-muted-foreground">История рефералов пустая</p>
+              ) : (
               <TooltipProvider delayDuration={150}>
                 <Table>
                   <TableHeader>
@@ -1798,6 +1891,7 @@ function ReferrerTable({
                   </TableBody>
                 </Table>
               </TooltipProvider>
+              )}
             </div>
           )}
 
@@ -1887,6 +1981,20 @@ function ReferrerTable({
                 <span className="mt-1 block text-xs text-muted-foreground">
                   Пользователь будет помечен как заблокированный и больше не сможет получать баллы в
                   реферальной системе.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-sm text-foreground">
+              <Checkbox
+                checked={debitPenalized}
+                onCheckedChange={(checked) => setDebitPenalized(checked === true)}
+                disabled={debitLoading}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="block font-semibold">Штраф</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Отметить пользователя как оштрафованного. Если галочка снята, прежний штраф будет снят после списания.
                 </span>
               </span>
             </label>
@@ -2009,6 +2117,12 @@ export default function AdminReferrals() {
   const [exchangeRequestsError, setExchangeRequestsError] = useState("");
   const [exchangeActionId, setExchangeActionId] = useState("");
   const [exchangeComments, setExchangeComments] = useState<Record<string, string>>({});
+  const [exchangeApprovalRequest, setExchangeApprovalRequest] = useState<ReferralExchangeRequest | null>(null);
+  const [exchangeRejectionRequest, setExchangeRejectionRequest] = useState<ReferralExchangeRequest | null>(null);
+  const [exchangeApprovalForce, setExchangeApprovalForce] = useState(false);
+  const [exchangeApprovalError, setExchangeApprovalError] = useState("");
+  const [exchangeRejectionError, setExchangeRejectionError] = useState("");
+  const exchangeActionInFlight = useRef(false);
   const didAutoLoad = useRef(false);
 
   const loadExchangeRequests = useCallback(async (adminToken = token.trim()) => {
@@ -2074,14 +2188,19 @@ export default function AdminReferrals() {
   }, [limit, loadExchangeRequests, period, token]);
 
   const processExchangeRequest = useCallback(
-    async (requestId: string, action: "approve" | "reject") => {
+    async (requestId: string, action: "approve" | "reject", force = false) => {
+      if (exchangeActionInFlight.current) return;
       const trimmedToken = token.trim();
       if (!trimmedToken) {
-        setExchangeRequestsError("Введите ADMIN_REDIS_TOKEN");
+        if (action === "approve") setExchangeApprovalError("Введите ADMIN_REDIS_TOKEN");
+        else setExchangeRejectionError("Введите ADMIN_REDIS_TOKEN");
         return;
       }
+      exchangeActionInFlight.current = true;
       setExchangeActionId(requestId);
       setExchangeRequestsError("");
+      if (action === "approve") setExchangeApprovalError("");
+      else setExchangeRejectionError("");
       try {
         const typedComment = (exchangeComments[requestId] || "").trim();
         const comment =
@@ -2093,7 +2212,7 @@ export default function AdminReferrals() {
             "X-Admin-Token": trimmedToken,
           },
           credentials: "include",
-          body: JSON.stringify({ comment }),
+          body: JSON.stringify(action === "approve" ? { comment, force } : { comment }),
         });
         const body = await res.json().catch(() => null);
         if (!res.ok) {
@@ -2106,8 +2225,10 @@ export default function AdminReferrals() {
         const data = body as ReferralExchangeActionResponse;
         if (action === "approve") {
           toast.success(`Заявка одобрена. Баланс: ${data.exchange?.balance ?? data.debit?.balance ?? "—"}`);
+          setExchangeApprovalRequest(null);
         } else {
           toast.success("Заявка отклонена");
+          setExchangeRejectionRequest(null);
         }
         setExchangeComments((prev) => {
           const next = { ...prev };
@@ -2116,8 +2237,10 @@ export default function AdminReferrals() {
         });
         await loadExchangeRequests(trimmedToken);
       } catch (err) {
-        setExchangeRequestsError(asErrorMessage(err));
+        if (action === "approve") setExchangeApprovalError(asErrorMessage(err));
+        else setExchangeRejectionError(asErrorMessage(err));
       } finally {
+        exchangeActionInFlight.current = false;
         setExchangeActionId("");
       }
     },
@@ -2221,6 +2344,11 @@ export default function AdminReferrals() {
         setExchangeRequestsError("");
         setExchangeActionId("");
         setExchangeComments({});
+        setExchangeApprovalRequest(null);
+        setExchangeRejectionRequest(null);
+        setExchangeApprovalForce(false);
+        setExchangeApprovalError("");
+        setExchangeRejectionError("");
         setError("");
       }}
       onRefresh={load}
@@ -2228,6 +2356,15 @@ export default function AdminReferrals() {
       error={error}
       updatedAt={summary?.generatedAt}
     >
+      <ReferralUserWorkspace
+        key={token}
+        items={filteredReferrers}
+        eventType={eventType}
+        token={token}
+        filtersPanel={referrerFiltersPanel}
+        showReferrers={Boolean(summary)}
+        renderPage={({ openHistory, openDebit }) => (
+          <>
       <section className="rounded-2xl bg-card p-4 ring-1 ring-border">
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <div className="mr-auto">
@@ -2262,8 +2399,7 @@ export default function AdminReferrals() {
                   <TableHead>Заявка</TableHead>
                   <TableHead>Детали</TableHead>
                   <TableHead>Баллы</TableHead>
-                  <TableHead>Комментарий</TableHead>
-                  <TableHead className="text-right">Действия</TableHead>
+                  <TableHead>Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -2271,7 +2407,7 @@ export default function AdminReferrals() {
                   <TableRow key={request.id}>
                     <TableCell className="whitespace-nowrap text-xs">{formatDate(request.createdAt)}</TableCell>
                     <TableCell className="text-xs">
-                      <div className="space-y-1">
+                      <div className="flex flex-col items-start gap-1">
                         <CopyableText value={request.referrerUuid} label="UUID" displayValue={shortenUuid(request.referrerUuid)} />
                         {request.email ? <CopyableText value={request.email} label="Email" className="max-w-[220px]" /> : null}
                       </div>
@@ -2281,34 +2417,44 @@ export default function AdminReferrals() {
                       {formatExchangeRequestDetails(request)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs font-bold">{request.points}</TableCell>
-                    <TableCell className="min-w-[220px]">
-                      <Textarea
-                        value={exchangeComments[request.id] || ""}
-                        onChange={(event) =>
-                          setExchangeComments((prev) => ({ ...prev, [request.id]: event.target.value }))
-                        }
-                        placeholder="Комментарий оператора"
-                        disabled={exchangeActionId === request.id}
-                        className="min-h-20 text-xs"
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                    <TableCell className="min-w-[248px]">
+                      <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={Boolean(exchangeActionId)}
-                          onClick={() => void processExchangeRequest(request.id, "approve")}
+                          className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-muted"
+                          onClick={() => openHistory(request.referrerUuid)}
                         >
-                          {exchangeActionId === request.id ? "..." : "Одобрить"}
+                          История
                         </button>
                         <button
                           type="button"
                           className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                           disabled={Boolean(exchangeActionId)}
-                          onClick={() => void processExchangeRequest(request.id, "reject")}
+                          onClick={() => {
+                            setExchangeRejectionRequest(request);
+                            setExchangeRejectionError("");
+                          }}
                         >
                           Отклонить
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={Boolean(exchangeActionId)}
+                          onClick={() => {
+                            setExchangeApprovalRequest(request);
+                            setExchangeApprovalForce(false);
+                            setExchangeApprovalError("");
+                          }}
+                        >
+                          {exchangeActionId === request.id ? "..." : "Одобрить"}
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg bg-destructive px-3 py-2 text-xs font-semibold text-destructive-foreground transition hover:bg-destructive/90"
+                          onClick={() => openDebit(request.referrerUuid)}
+                        >
+                          Списать
                         </button>
                       </div>
                     </TableCell>
@@ -2319,6 +2465,151 @@ export default function AdminReferrals() {
           </div>
         )}
       </section>
+
+      <Dialog
+        open={Boolean(exchangeApprovalRequest)}
+        onOpenChange={(open) => {
+          if (!open && !exchangeActionInFlight.current) setExchangeApprovalRequest(null);
+        }}
+      >
+        <DialogContent
+          onEscapeKeyDown={(event) => {
+            if (exchangeActionInFlight.current) event.preventDefault();
+          }}
+          onPointerDownOutside={(event) => {
+            if (exchangeActionInFlight.current) event.preventDefault();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Одобрить заявку на обмен?</DialogTitle>
+            <DialogDescription>Подтвердите выдачу и списание баллов по заявке.</DialogDescription>
+          </DialogHeader>
+          {exchangeApprovalRequest ? (
+            <div className="space-y-3 text-sm text-foreground">
+              <div>
+                <p>Пользователь: {exchangeApprovalRequest.email || "—"}</p>
+                <p className="break-all text-xs text-muted-foreground">UUID: {exchangeApprovalRequest.referrerUuid}</p>
+              </div>
+              <p>Обмен: {formatExchangeRequestKind(exchangeApprovalRequest)}</p>
+              <p className="whitespace-pre-wrap text-muted-foreground">{formatExchangeRequestDetails(exchangeApprovalRequest)}</p>
+              <p>К списанию: <strong>{exchangeApprovalRequest.points}</strong> баллов</p>
+              <label className="block font-semibold">
+                Комментарий
+                <Textarea
+                  value={exchangeComments[exchangeApprovalRequest.id] || ""}
+                  onChange={(event) => setExchangeComments((prev) => ({ ...prev, [exchangeApprovalRequest.id]: event.target.value }))}
+                  placeholder="Комментарий оператора"
+                  disabled={exchangeActionId === exchangeApprovalRequest.id}
+                  className="mt-1 font-normal"
+                />
+              </label>
+              <label className="flex items-start gap-3 rounded-lg border border-border bg-background p-3">
+                <Checkbox
+                  checked={exchangeApprovalForce}
+                  onCheckedChange={(checked) => setExchangeApprovalForce(checked === true)}
+                  disabled={exchangeActionId === exchangeApprovalRequest.id}
+                  className="mt-0.5"
+                />
+                <span>Списать баллы, даже если тариф не активен</span>
+              </label>
+              {exchangeApprovalError ? (
+                <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                  {exchangeApprovalError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <button
+              type="button"
+              className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={Boolean(exchangeActionId)}
+              onClick={() => setExchangeApprovalRequest(null)}
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={Boolean(exchangeActionId) || !exchangeApprovalRequest}
+              onClick={() => {
+                if (exchangeApprovalRequest) {
+                  void processExchangeRequest(exchangeApprovalRequest.id, "approve", exchangeApprovalForce);
+                }
+              }}
+            >
+              {exchangeActionId === exchangeApprovalRequest?.id ? "Одобряем..." : "Одобрить и списать баллы"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(exchangeRejectionRequest)}
+        onOpenChange={(open) => {
+          if (!open && !exchangeActionInFlight.current) setExchangeRejectionRequest(null);
+        }}
+      >
+        <DialogContent
+          onEscapeKeyDown={(event) => {
+            if (exchangeActionInFlight.current) event.preventDefault();
+          }}
+          onPointerDownOutside={(event) => {
+            if (exchangeActionInFlight.current) event.preventDefault();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Отклонить заявку на обмен?</DialogTitle>
+            <DialogDescription>Подтвердите отклонение заявки.</DialogDescription>
+          </DialogHeader>
+          {exchangeRejectionRequest ? (
+            <div className="space-y-3 text-sm text-foreground">
+              <div>
+                <p>Пользователь: {exchangeRejectionRequest.email || "—"}</p>
+                <p className="break-all text-xs text-muted-foreground">UUID: {exchangeRejectionRequest.referrerUuid}</p>
+              </div>
+              <p>Обмен: {formatExchangeRequestKind(exchangeRejectionRequest)}</p>
+              <p className="whitespace-pre-wrap text-muted-foreground">{formatExchangeRequestDetails(exchangeRejectionRequest)}</p>
+              <p>Баллы по заявке: <strong>{exchangeRejectionRequest.points}</strong></p>
+              <label className="block font-semibold">
+                Комментарий
+                <Textarea
+                  value={exchangeComments[exchangeRejectionRequest.id] || ""}
+                  onChange={(event) => setExchangeComments((prev) => ({ ...prev, [exchangeRejectionRequest.id]: event.target.value }))}
+                  placeholder="Комментарий оператора"
+                  disabled={exchangeActionId === exchangeRejectionRequest.id}
+                  className="mt-1 font-normal"
+                />
+              </label>
+              {exchangeRejectionError ? (
+                <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                  {exchangeRejectionError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <button
+              type="button"
+              className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={Boolean(exchangeActionId)}
+              onClick={() => setExchangeRejectionRequest(null)}
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              className="rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground transition hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={Boolean(exchangeActionId) || !exchangeRejectionRequest}
+              onClick={() => {
+                if (exchangeRejectionRequest) void processExchangeRequest(exchangeRejectionRequest.id, "reject");
+              }}
+            >
+              {exchangeActionId === exchangeRejectionRequest?.id ? "Отклоняем..." : "Отклонить заявку"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {summary && (
         <>
@@ -2363,9 +2654,11 @@ export default function AdminReferrals() {
 
           <DailyRegistrationsChart data={summary.dailyRegistrations || []} />
 
-          <ReferrerTable items={filteredReferrers} eventType={eventType} token={token} filtersPanel={referrerFiltersPanel} />
         </>
       )}
+          </>
+        )}
+      />
     </AdminPageShell>
   );
 }

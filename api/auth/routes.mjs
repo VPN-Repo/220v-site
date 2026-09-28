@@ -37,7 +37,8 @@ import {
   putOtp,
   verifyOtp,
 } from "./otp.mjs";
-import { sendCodeSchema, verifySchema } from "./schemas.mjs";
+import { emailSchema, sendCodeSchema, verifySchema } from "./schemas.mjs";
+import { recordDailyAuth } from "./dailyStats.mjs";
 import { recordReferralEvent } from "../referrals/events.mjs";
 import {
   clearSessionCookies,
@@ -146,6 +147,7 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
           "send-code dispatched",
         );
         await recordAuthEvent("send_code_sent", req, { email, status: "ok" });
+        await recordDailyAuth("sent", email, req);
 
         if (parsed.data.ref_uuid) {
           await recordReferralEvent("ref_send_code", req, {
@@ -164,6 +166,15 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
 
   router.post("/api/auth/verify", verifyIpLimiter, async (req, res) => {
     try {
+      const attemptEmail = emailSchema.safeParse(req.body?.email);
+      const submittedCode = req.body?.code;
+      if (
+        attemptEmail.success &&
+        (typeof submittedCode === "string" || typeof submittedCode === "number") &&
+        String(submittedCode).trim()
+      ) {
+        await recordDailyAuth("attempted", attemptEmail.data, req);
+      }
       const parsed = verifySchema.safeParse(req.body);
       if (!parsed.success) {
         await recordAuthEvent("verify_invalid_request", req, { status: "rejected" });
@@ -212,6 +223,8 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
         };
         return clientError(res, otpResult.status, messages[otpResult.reason] || "Неверный код");
       }
+
+      await recordDailyAuth("confirmed", email, req);
 
       const referrerUuid = parsed.data.ref_uuid;
       let referralBlocked = false;

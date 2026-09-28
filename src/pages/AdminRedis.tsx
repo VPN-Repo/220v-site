@@ -49,6 +49,16 @@ type AuthEvent = {
   detail?: string;
 };
 
+type DailyAuthDay = {
+  date: string;
+  sent: number;
+  unfinished: number;
+  noCodeSubmitted: number;
+  codeNotAccepted: number;
+  preliminary: boolean;
+  partial: boolean;
+};
+
 type RedisAuthSnapshot = {
   generatedAt: string;
   totals: {
@@ -73,6 +83,12 @@ type RedisAuthSnapshot = {
     byEmailHash: CounterEntry[];
   };
   events: AuthEvent[];
+  dailyAuth: {
+    timeZone: string;
+    startedAt: string | null;
+    today: string;
+    days: DailyAuthDay[];
+  };
 };
 
 const AUTO_OPEN_ITEM_LIMIT = 5;
@@ -104,6 +120,62 @@ function StatCard({ label, value }: { label: string; value: number }) {
       <p className="text-xs uppercase text-muted-foreground">{label}</p>
       <p className="mt-2 text-2xl font-bold text-foreground">{value}</p>
     </div>
+  );
+}
+
+function DailyAuthStats({ data }: { data: RedisAuthSnapshot["dailyAuth"] }) {
+  const today = data.days[0]?.date === data.today ? data.days[0] : null;
+  return (
+    <section className="rounded-2xl bg-card p-4 ring-1 ring-border">
+      <div className="mb-4">
+        <h2 className="text-lg font-bold text-foreground">Незавершённая авторизация</h2>
+        <p className="text-sm text-muted-foreground">
+          Уникальные email по календарным дням Москвы. Сегодняшние числа предварительные.
+        </p>
+      </div>
+      {!data.startedAt ? (
+        <p className="text-sm text-muted-foreground">Нет данных. Сбор начнётся с первого события авторизации.</p>
+      ) : (
+        <>
+          {today && (
+            <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard label="Запросили код сегодня" value={today.sent} />
+              <StatCard label="Не завершили ввод" value={today.unfinished} />
+              <StatCard label="Не отправили код на проверку" value={today.noCodeSubmitted} />
+              <StatCard label="Отправили, но код не принят" value={today.codeNotAccepted} />
+            </div>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[650px] text-left text-sm">
+              <thead className="border-b border-border text-muted-foreground">
+                <tr>
+                  <th scope="col" className="px-3 py-2">День (МСК)</th>
+                  <th scope="col" className="px-3 py-2 text-right">Запросили код</th>
+                  <th scope="col" className="px-3 py-2 text-right">Не завершили ввод</th>
+                  <th scope="col" className="px-3 py-2 text-right">Не отправили код на проверку</th>
+                  <th scope="col" className="px-3 py-2 text-right">Код не принят</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.days.map((day) => (
+                  <tr key={day.date} className="border-b border-border last:border-0">
+                    <th scope="row" className="whitespace-nowrap px-3 py-2 font-medium text-foreground">
+                      {day.date}
+                      {day.preliminary && <span className="ml-2 text-xs text-muted-foreground">предварительно</span>}
+                      {day.partial && <span className="ml-2 text-xs text-muted-foreground">неполный день</span>}
+                    </th>
+                    <td className="px-3 py-2 text-right">{day.sent}</td>
+                    <td className="px-3 py-2 text-right font-semibold">{day.unfinished}</td>
+                    <td className="px-3 py-2 text-right">{day.noCodeSubmitted}</td>
+                    <td className="px-3 py-2 text-right">{day.codeNotAccepted}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -327,6 +399,7 @@ export default function AdminRedis() {
     >
         {snapshot && (
           <>
+            <DailyAuthStats data={snapshot.dailyAuth} />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <StatCard label="OTP" value={snapshot.totals.otp} />
               <StatCard label="Cooldown" value={snapshot.totals.cooldowns} />
