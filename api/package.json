@@ -14,7 +14,7 @@
     "express-rate-limit": "^7.5.0",
     "ioredis": "^5.6.1",
     "multer": "^2.1.1",
-    "nodemailer": "^7.0.13",
+    "nodemailer": "^10.0.10",
     "pino": "^9.6.0",
     "pino-http": "^10.4.0",
     "rate-limit-redis": "^4.2.0",
