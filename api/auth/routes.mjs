@@ -38,7 +38,7 @@ import {
   verifyOtp,
 } from "./otp.mjs";
 import { emailSchema, sendCodeSchema, verifySchema } from "./schemas.mjs";
-import { recordDailyAuth } from "./dailyStats.mjs";
+import { listDailyUnfinishedEmails, recordDailyAuth } from "./dailyStats.mjs";
 import { recordReferralEvent } from "../referrals/events.mjs";
 import {
   clearSessionCookies,
@@ -61,6 +61,20 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
       return res.json(snapshot);
     } catch (err) {
       return serverError(res, req, err, "Не удалось загрузить данные Redis");
+    }
+  });
+
+  router.get("/api/admin/redis-auth/unfinished", requireAdminToken, async (req, res) => {
+    const offset = req.query.offset === undefined ? 0 : Number(req.query.offset);
+    const limit = req.query.limit === undefined ? 50 : Number(req.query.limit);
+    if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      return clientError(res, 400, "Некорректная страница списка");
+    }
+    try {
+      res.set("Cache-Control", "no-store");
+      return res.json(await listDailyUnfinishedEmails({ offset, limit }));
+    } catch (err) {
+      return serverError(res, req, err, "Не удалось загрузить email");
     }
   });
 

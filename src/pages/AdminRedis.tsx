@@ -1,9 +1,10 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Database } from "lucide-react";
+import { Activity, Database, Info } from "lucide-react";
 import { apiBase } from "@/lib/api";
 import { formatUserError } from "@/lib/errorMessages";
 import { ADMIN_TOKEN_STORAGE_KEY } from "@/lib/admin";
 import AdminPageShell from "@/components/AdminPageShell";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type CounterEntry = { key: string; count: number };
 
@@ -59,6 +60,19 @@ type DailyAuthDay = {
   partial: boolean;
 };
 
+type UnfinishedEmailPage = {
+  total: number;
+  available: number;
+  unavailable: number;
+  offset: number;
+  limit: number;
+  items: {
+    date: string;
+    email: string;
+    reason: "no_code_submitted" | "code_not_accepted";
+  }[];
+};
+
 type RedisAuthSnapshot = {
   generatedAt: string;
   totals: {
@@ -92,6 +106,7 @@ type RedisAuthSnapshot = {
 };
 
 const AUTO_OPEN_ITEM_LIMIT = 5;
+const UNFINISHED_PAGE_SIZE = 50;
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
@@ -114,37 +129,158 @@ function asErrorMessage(error: unknown) {
   return formatUserError(error, "Не удалось загрузить данные");
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function StatCard({ label, value, suffix, onClick }: {
+  label: string;
+  value: number;
+  suffix?: string;
+  onClick?: () => void;
+}) {
+  const amount = <>{value}{suffix && <> <span className="text-base font-medium text-muted-foreground">{suffix}</span></>}</>;
   return (
     <div className="rounded-xl bg-card p-4 ring-1 ring-border">
-      <p className="text-xs uppercase text-muted-foreground">{label}</p>
-      <p className="mt-2 text-2xl font-bold text-foreground">{value}</p>
+      <div className="flex items-center gap-1.5">
+        <p className="text-xs uppercase text-muted-foreground">{label}</p>
+        {onClick && (
+          <button type="button" onClick={onClick} aria-label="Показать email с незавершённым входом"
+            className="rounded-full text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+            <Info className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+      <p className="mt-2 text-2xl font-bold text-foreground">{amount}</p>
     </div>
   );
 }
 
-function DailyAuthStats({ data }: { data: RedisAuthSnapshot["dailyAuth"] }) {
-  const today = data.days[0]?.date === data.today ? data.days[0] : null;
+function DailyAuthStats({ data, token }: { data: RedisAuthSnapshot["dailyAuth"]; token: string }) {
+  const [emailsOpen, setEmailsOpen] = useState(false);
+  const [emailPage, setEmailPage] = useState(0);
+  const [emails, setEmails] = useState<UnfinishedEmailPage | null>(null);
+  const [emailsLoading, setEmailsLoading] = useState(false);
+  const [emailsError, setEmailsError] = useState("");
+  const [reloadEmails, setReloadEmails] = useState(0);
+
+  useEffect(() => {
+    if (!emailsOpen) return;
+    const controller = new AbortController();
+    setEmails(null);
+    setEmailsError("");
+    setEmailsLoading(true);
+    const loadEmails = async () => {
+      try {
+        const res = await fetch(
+          `${apiBase}/admin/redis-auth/unfinished?offset=${emailPage * UNFINISHED_PAGE_SIZE}&limit=${UNFINISHED_PAGE_SIZE}`,
+          { headers: { "X-Admin-Token": token.trim() }, credentials: "include", signal: controller.signal },
+        );
+        const body = await res.json().catch(() => null);
+        if (!res.ok) {
+          const message = body && typeof body.error === "string" ? body.error : `Ошибка ${res.status}`;
+          throw new Error(message);
+        }
+        if (!controller.signal.aborted) setEmails(body as UnfinishedEmailPage);
+      } catch (err) {
+        if (!controller.signal.aborted) setEmailsError(asErrorMessage(err));
+      } finally {
+        if (!controller.signal.aborted) setEmailsLoading(false);
+      }
+    };
+    void loadEmails();
+    return () => controller.abort();
+  }, [emailsOpen, emailPage, token, reloadEmails]);
+
+  const totals = data.days.reduce(
+    (sum, day) => ({
+      sent: sum.sent + day.sent,
+      unfinished: sum.unfinished + day.unfinished,
+      noCodeSubmitted: sum.noCodeSubmitted + day.noCodeSubmitted,
+      codeNotAccepted: sum.codeNotAccepted + day.codeNotAccepted,
+    }),
+    { sent: 0, unfinished: 0, noCodeSubmitted: 0, codeNotAccepted: 0 },
+  );
+  const unfinishedPercent = totals.sent ? Math.round((totals.unfinished / totals.sent) * 100) : 0;
   return (
     <section className="rounded-2xl bg-card p-4 ring-1 ring-border">
       <div className="mb-4">
         <h2 className="text-lg font-bold text-foreground">Незавершённая авторизация</h2>
         <p className="text-sm text-muted-foreground">
-          Уникальные email по календарным дням Москвы. Сегодняшние числа предварительные.
+          Сумма по показанным календарным дням Москвы (до 30 дней). Сегодняшние числа предварительные.
         </p>
       </div>
       {!data.startedAt ? (
         <p className="text-sm text-muted-foreground">Нет данных. Сбор начнётся с первого события авторизации.</p>
       ) : (
         <>
-          {today && (
-            <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard label="Запросили код сегодня" value={today.sent} />
-              <StatCard label="Не завершили ввод" value={today.unfinished} />
-              <StatCard label="Не отправили код на проверку" value={today.noCodeSubmitted} />
-              <StatCard label="Отправили, но код не принят" value={today.codeNotAccepted} />
-            </div>
-          )}
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard label="Запросили код" value={totals.sent} />
+            <StatCard label="Не завершили ввод" value={totals.unfinished} suffix={`(${unfinishedPercent}%)`}
+              onClick={() => setEmailsOpen(true)} />
+            <StatCard label="Не отправили код на проверку" value={totals.noCodeSubmitted} />
+            <StatCard label="Отправили, но код не принят" value={totals.codeNotAccepted} />
+          </div>
+          <Dialog open={emailsOpen} onOpenChange={(open) => {
+            setEmailsOpen(open);
+            if (!open) { setEmails(null); setEmailPage(0); }
+          }}>
+            <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>Email с незавершённым входом</DialogTitle>
+                <DialogDescription>
+                  За показанные дни по Москве. Один email может встречаться в разные дни.
+                </DialogDescription>
+              </DialogHeader>
+              {emailsLoading && <p className="text-sm text-muted-foreground">Загрузка email…</p>}
+              {emailsError && (
+                <div className="flex items-center gap-3 text-sm text-destructive">
+                  <span>{emailsError}</span>
+                  <button type="button" onClick={() => setReloadEmails((value) => value + 1)} className="underline">
+                    Повторить
+                  </button>
+                </div>
+              )}
+              {emails && (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Доступны email для {emails.available} из {emails.total} незавершённых входов.
+                  </p>
+                  {emails.unavailable > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Для {emails.unavailable} более ранних записей полный email не сохранялся.
+                    </p>
+                  )}
+                  {emails.items.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">На этой странице email нет.</p>
+                  ) : (
+                    <div className="max-h-[50vh] overflow-auto">
+                      <table className="w-full min-w-[520px] text-left text-sm">
+                        <thead className="border-b border-border text-muted-foreground">
+                          <tr><th scope="col" className="px-3 py-2">Дата (МСК)</th><th scope="col" className="px-3 py-2">Email</th><th scope="col" className="px-3 py-2">Причина</th></tr>
+                        </thead>
+                        <tbody>
+                          {emails.items.map((item) => (
+                            <tr key={`${item.date}:${item.email}`} className="border-b border-border last:border-0">
+                              <td className="whitespace-nowrap px-3 py-2">{item.date}</td>
+                              <td className="break-all px-3 py-2">{item.email}</td>
+                              <td className="px-3 py-2">{item.reason === "no_code_submitted" ? "Код не отправлен на проверку" : "Код не принят"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {emails.available > UNFINISHED_PAGE_SIZE && (
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <button type="button" className="rounded border border-border px-3 py-2 disabled:opacity-50"
+                        disabled={emailPage === 0} onClick={() => setEmailPage((page) => page - 1)}>Назад</button>
+                      <span>{emails.offset + 1}–{Math.min(emails.offset + emails.items.length, emails.available)} из {emails.available}</span>
+                      <button type="button" className="rounded border border-border px-3 py-2 disabled:opacity-50"
+                        disabled={emails.offset + emails.items.length >= emails.available}
+                        onClick={() => setEmailPage((page) => page + 1)}>Далее</button>
+                    </div>
+                  )}
+                </>
+              )}
+            </DialogContent>
+          </Dialog>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[650px] text-left text-sm">
               <thead className="border-b border-border text-muted-foreground">
@@ -399,7 +535,7 @@ export default function AdminRedis() {
     >
         {snapshot && (
           <>
-            <DailyAuthStats data={snapshot.dailyAuth} />
+            <DailyAuthStats data={snapshot.dailyAuth} token={token} />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <StatCard label="OTP" value={snapshot.totals.otp} />
               <StatCard label="Cooldown" value={snapshot.totals.cooldowns} />

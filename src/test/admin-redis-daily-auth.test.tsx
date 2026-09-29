@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import AdminRedis from "@/pages/AdminRedis";
 import { ADMIN_TOKEN_STORAGE_KEY } from "@/lib/admin";
@@ -14,8 +14,19 @@ afterEach(() => {
   localStorage.clear();
 });
 
-it("shows the preliminary day, breakdown, and earlier days above Redis details", async () => {
-  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+it("sums the displayed days and shows the unfinished share above Redis details", async () => {
+  const fetchMock = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url.includes("/redis-auth/unfinished?")) {
+      expect(options?.headers).toEqual({ "X-Admin-Token": "admin-test-token" });
+      return new Response(JSON.stringify({
+        total: 5, available: 2, unavailable: 3, offset: 0, limit: 50,
+        items: [
+          { date: "2026-09-28", email: "first@gmail.com", reason: "no_code_submitted" },
+          { date: "2026-09-27", email: "second@gmail.com", reason: "code_not_accepted" },
+        ],
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    return new Response(JSON.stringify({
     generatedAt: "2026-09-28T12:00:00Z",
     dailyAuth: {
       timeZone: "Europe/Moscow",
@@ -31,11 +42,21 @@ it("shows the preliminary day, breakdown, and earlier days above Redis details",
     rateLimits: { sendCodeIp: [], sendCodeEmail: [], verifyIp: [], checkoutSession: [] },
     stats: { byType: [], byIp: [], byEmailHash: [] },
     events: [],
-  }), { status: 200, headers: { "Content-Type": "application/json" } })));
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  });
+  vi.stubGlobal("fetch", fetchMock);
 
   render(<AdminRedis />);
   const section = await screen.findByRole("heading", { name: "Незавершённая авторизация" });
-  const table = section.closest("section")?.querySelector("table");
+  const summary = section.closest("section");
+  expect(summary).toHaveTextContent("Сумма по показанным календарным дням Москвы");
+  const statCard = (label: string) => within(summary!).getByText(label, { selector: "p" }).closest(".rounded-xl")!;
+  expect(statCard("Запросили код")).toHaveTextContent("9");
+  expect(statCard("Не завершили ввод")).toHaveTextContent("5 (56%)");
+  expect(statCard("Не отправили код на проверку")).toHaveTextContent("3");
+  expect(statCard("Отправили, но код не принят")).toHaveTextContent("2");
+  expect(statCard("Не завершили ввод").querySelector("p.mt-2")).toHaveTextContent("5 (56%)");
+  const table = summary?.querySelector("table");
   expect(table).toBeTruthy();
   const rows = within(table!).getAllByRole("row");
   expect(rows).toHaveLength(3);
@@ -45,6 +66,15 @@ it("shows the preliminary day, breakdown, and earlier days above Redis details",
   expect(rows[1]).toHaveTextContent("3");
   expect(rows[2]).toHaveTextContent("неполный день");
   expect(within(table!).getByRole("columnheader", { name: "Не завершили ввод" })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Показать email с незавершённым входом" }));
+  const dialog = await screen.findByRole("dialog");
+  expect(await within(dialog).findByText("first@gmail.com")).toBeInTheDocument();
+  expect(within(dialog).getByText("second@gmail.com")).toBeInTheDocument();
+  expect(within(dialog).getByText("Код не отправлен на проверку")).toBeInTheDocument();
+  expect(within(dialog).getByText("Код не принят")).toBeInTheDocument();
+  expect(within(dialog).getByText(/Для 3 более ранних записей/)).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/redis-auth/unfinished?offset=0&limit=50"), expect.anything());
 });
 
 it("explains why the history is empty before collection starts", async () => {
