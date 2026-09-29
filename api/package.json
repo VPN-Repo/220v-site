@@ -17,7 +17,7 @@
     "nodemailer": "^7.0.13",
     "pino": "^9.6.0",
     "pino-http": "^10.4.0",
-    "rate-limit-redis": "^4.2.0",
+    "rate-limit-redis": "^6.0.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {
