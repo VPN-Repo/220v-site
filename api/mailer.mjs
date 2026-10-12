@@ -177,20 +177,44 @@ function buildTransport() {
   return cachedTransport;
 }
 
-function buildOtpMessage(code) {
+// purpose: "login" (default) — вход по коду; "password_change" — подтверждение
+// установки/смены пароля в личном кабинете.
+export function buildOtpMessage(code, purpose = "login") {
   const safeCode = escapeHtml(code);
-  const subject = `Ваш код для входа в 220v`;
+  const changingPassword = purpose === "password_change";
+  const subject = changingPassword ? "Код для смены пароля в 220v" : `Ваш код для входа в 220v`;
+  const copy = changingPassword
+    ? {
+        requested: "Вы запросили установку или смену пароля в личном кабинете.",
+        instruction: "Введите его в окне смены пароля. Код действует 10 минут.",
+        unrequested: "Если вы не запрашивали смену пароля, просто удалите это письмо — ваш пароль не изменится.",
+        preheader: `Код для смены пароля в 220v: ${safeCode}. Действует 10 минут.`,
+        badge: "Смена пароля",
+        hint: "Скопируйте код и вставьте его в окне смены пароля",
+        usage: "и подходит только для одной смены пароля.",
+        footer: "Не запрашивали смену пароля? Проигнорируйте письмо — пароль останется прежним.",
+      }
+    : {
+        requested: "Вы запросили вход в личный кабинет.",
+        instruction: "Введите его на странице входа. Код действует 10 минут.",
+        unrequested: "Если вы не запрашивали вход, просто удалите это письмо.",
+        preheader: `Код для входа в 220v: ${safeCode}. Действует 10 минут.`,
+        badge: "Подтверждение входа",
+        hint: "Скопируйте код и вставьте его на странице входа",
+        usage: "и подходит только для одного входа.",
+        footer: "Не запрашивали вход? Просто проигнорируйте это письмо.",
+      };
   const text = [
     "220v · безопасный VPN",
     "",
-    "Вы запросили вход в личный кабинет.",
+    copy.requested,
     "",
     `Ваш код подтверждения: ${code}`,
     "",
-    "Введите его на странице входа. Код действует 10 минут.",
+    copy.instruction,
     "",
     "Не сообщайте код никому — команда 220v никогда не просит его по почте или в чате.",
-    "Если вы не запрашивали вход, просто удалите это письмо.",
+    copy.unrequested,
     "",
     "220v",
     "support@220v.shop",
@@ -207,7 +231,7 @@ function buildOtpMessage(code) {
   </head>
   <body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#ffffff;">
     <span style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;font-size:1px;line-height:1px;mso-hide:all;">
-      Код для входа в 220v: ${safeCode}. Действует 10 минут.
+      ${copy.preheader}
     </span>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0a;padding:40px 16px;">
       <tr>
@@ -230,13 +254,13 @@ function buildOtpMessage(code) {
                   <tr>
                     <td style="padding:28px 24px 8px 24px;text-align:center;">
                       <div style="display:inline-block;padding:6px 14px;background:rgba(198,255,61,0.12);border:1px solid rgba(198,255,61,0.25);border-radius:999px;font-size:12px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;color:#c6ff3d;">
-                        Подтверждение входа
+                        ${copy.badge}
                       </div>
                       <div style="margin-top:18px;font-size:22px;font-weight:800;color:#ffffff;line-height:1.3;">
                         Ваш одноразовый код
                       </div>
                       <div style="margin-top:8px;font-size:14px;color:#9a9a9a;line-height:1.6;">
-                        Скопируйте код и вставьте его на странице входа
+                        ${copy.hint}
                       </div>
                     </td>
                   </tr>
@@ -250,7 +274,7 @@ function buildOtpMessage(code) {
                   <tr>
                     <td style="padding:16px 28px 28px 28px;text-align:center;">
                       <div style="font-size:14px;color:#c7c7c7;line-height:1.7;">
-                        Код действует <strong style="color:#ffffff;">10&nbsp;минут</strong> и подходит только для одного входа.
+                        Код действует <strong style="color:#ffffff;">10&nbsp;минут</strong> ${copy.usage}
                       </div>
                     </td>
                   </tr>
@@ -262,7 +286,7 @@ function buildOtpMessage(code) {
                       <div style="font-size:13px;color:#9a9a9a;line-height:1.7;text-align:center;">
                         <strong style="color:#ffffff;">Не передавайте код третьим лицам.</strong><br />
                         Сотрудники 220v никогда не запрашивают его в письмах, чатах или звонках.<br />
-                        Не запрашивали вход? Просто проигнорируйте это письмо.
+                        ${copy.footer}
                       </div>
                     </td>
                   </tr>
@@ -287,7 +311,7 @@ function buildOtpMessage(code) {
   return { subject, text, html };
 }
 
-export async function sendOtpEmail({ email, code }) {
+export async function sendOtpEmail({ email, code, purpose = "login" }) {
   const recipientDomain =
     typeof email === "string" && email.includes("@") ? email.slice(email.indexOf("@") + 1) : null;
 
@@ -317,7 +341,7 @@ export async function sendOtpEmail({ email, code }) {
     };
   }
 
-  const { subject, text, html } = buildOtpMessage(code);
+  const { subject, text, html } = buildOtpMessage(code, purpose);
 
   logger.info(
     {
@@ -326,6 +350,7 @@ export async function sendOtpEmail({ email, code }) {
       recipientDomain,
       fromEmail: from.email,
       fromName: from.name,
+      purpose,
     },
     "mailer sending otp email",
   );

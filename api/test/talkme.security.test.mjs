@@ -105,11 +105,11 @@ function installTalkMeFetchMock({ clients } = {}) {
 
 describe("talkme security", () => {
   before(async () => {
-    await redis.flushall();
+    await redis.flushdb();
   });
 
   beforeEach(async () => {
-    await redis.flushall();
+    await redis.flushdb();
     installTalkMeFetchMock();
   });
 

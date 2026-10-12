@@ -10,7 +10,7 @@
 const SITE_NAME = import.meta.env.VITE_SITE_NAME?.trim() || "220v";
 const TALKME_WIDGET_HASH = "d1845a025366171ec550f455fd14c266";
 
-let talkMeCloseFollowUpId: ReturnType<typeof window.setTimeout> | null = null;
+let talkMeCloseFollowUpId: number | null = null;
 
 function clearTalkMeCloseFollowUp(): void {
   if (talkMeCloseFollowUpId !== null) {

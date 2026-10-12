@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { randomBytes } from "node:crypto";
-import { ALLOWED_EMAIL_DOMAINS, OTP_COOLDOWN_SEC, SESSION_TTL_SEC } from "../config.mjs";
+import { ALLOWED_EMAIL_DOMAINS, OTP_COOLDOWN_SEC, OTP_TTL_SEC, SESSION_TTL_SEC } from "../config.mjs";
 import { clientError, serverError } from "../http/errors.mjs";
 import {
   formatOtpResendCooldownMessage,
@@ -14,6 +14,12 @@ import {
   sendCodeIpMinuteLimiter,
   sendCodeEmailLimiter,
   verifyIpLimiter,
+  authMethodLimiter,
+  passwordIpLimiter,
+  passwordEmailLimiter,
+  passwordChangeEmailLimiter,
+  passwordChangeAttemptLimiter,
+  adminPasswordLimiter,
 } from "../http/rateLimit.mjs";
 import {
   base64url,
@@ -37,7 +43,26 @@ import {
   putOtp,
   verifyOtp,
 } from "./otp.mjs";
-import { emailSchema, sendCodeSchema, verifySchema } from "./schemas.mjs";
+import {
+  adminSetPasswordSchema,
+  emailSchema,
+  methodSchema,
+  passwordChangeSchema,
+  passwordLoginSchema,
+  sendCodeSchema,
+  verifySchema,
+} from "./schemas.mjs";
+import {
+  adminSetPassword,
+  changePassword,
+  credentialVersion,
+  getCredential,
+  hashPassword,
+  saveInitialPassword,
+  saveLoginSession,
+  verifyPassword,
+} from "./password.mjs";
+import { passwordCooldownKey, passwordOtpKey } from "./keys.mjs";
 import { listDailyUnfinishedEmails, recordDailyAuth } from "./dailyStats.mjs";
 import { recordReferralEvent } from "../referrals/events.mjs";
 import {
@@ -45,12 +70,11 @@ import {
   deleteSession,
   requireAdminToken,
   requireSession,
-  saveSession,
   setSessionCookies,
 } from "./session.mjs";
 
 /**
- * @param {{ mailer: { sendOtpEmail: (opts: { email: string, code: string }) => Promise<{ ok: boolean, error?: string, detail?: string, messageId?: string }> }, loadUserProfile: (email: string, req: import('express').Request, refUuid?: string) => Promise<object>, extractUserUuid: (profile: object) => string | null, isReferralPointsBlocked?: (refUuid: string) => Promise<boolean> }} deps
+ * @param {{ mailer: { sendOtpEmail: (opts: { email: string, code: string, purpose?: "login" | "password_change" }) => Promise<{ ok: boolean, error?: string, detail?: string, messageId?: string }> }, loadUserProfile: (email: string, req: import('express').Request, refUuid?: string, options?: { enrich?: boolean }) => Promise<object>, extractUserUuid: (profile: object) => string | null, isReferralPointsBlocked?: (refUuid: string) => Promise<boolean> }} deps
  */
 export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isReferralPointsBlocked }) {
   const router = Router();
@@ -75,6 +99,94 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
       return res.json(await listDailyUnfinishedEmails({ offset, limit }));
     } catch (err) {
       return serverError(res, req, err, "Не удалось загрузить email");
+    }
+  });
+
+  // Support assigns a password when the user owns the account but cannot receive email codes.
+  router.post("/api/admin/set-password", adminPasswordLimiter, requireAdminToken, async (req, res) => {
+    try {
+      const parsed = adminSetPasswordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return clientError(res, 400, parsed.error.issues[0]?.message || "Некорректный email или пароль");
+      }
+      const { email, password } = parsed.data;
+      let profile;
+      try {
+        profile = await loadUserProfile(email, req, undefined, { enrich: false });
+      } catch (err) {
+        req.log.warn({ err, emailHash: emailHash(email) }, "admin set-password profile failed");
+        return clientError(res, err.status === 404 ? 404 : 502, "Не удалось загрузить аккаунт");
+      }
+      const userUuid = extractUserUuid(profile);
+      if (!userUuid || profile?.exists === false) {
+        return clientError(res, 404, "Аккаунт с таким email не найден");
+      }
+      const version = await adminSetPassword(email, userUuid, await hashPassword(password));
+      await recordAuthEvent("password_set_by_admin", req, { email, userUuid, status: "ok" });
+      return res.json({ ok: true, version });
+    } catch (err) {
+      return serverError(res, req, err);
+    }
+  });
+
+  router.post("/api/auth/method", authMethodLimiter, async (req, res) => {
+    try {
+      const parsed = methodSchema.safeParse(req.body);
+      if (!parsed.success) return clientError(res, 400, "Некорректный email");
+      return res.json({ hasPassword: Boolean(await getCredential(parsed.data.email)) });
+    } catch (err) {
+      return serverError(res, req, err);
+    }
+  });
+
+  router.post("/api/auth/login-password", passwordIpLimiter, passwordEmailLimiter, async (req, res) => {
+    try {
+      const parsed = passwordLoginSchema.safeParse(req.body);
+      if (!parsed.success) return clientError(res, 400, "Некорректный запрос");
+      const { email, password } = parsed.data;
+      const credential = await getCredential(email);
+      // verifyPassword always runs scrypt, so unknown emails take as long as wrong passwords.
+      if (!(await verifyPassword(password, credential))) {
+        await recordAuthEvent("password_login_failed", req, { email, status: "failed" });
+        return clientError(res, 401, "Неверный email или пароль");
+      }
+
+      let profile;
+      try {
+        profile = await loadUserProfile(email, req);
+      } catch (err) {
+        const status = isTimeoutError(err) ? timeoutStatusCode(err) : err.status || 502;
+        req.log.warn({ err, emailHash: emailHash(email) }, "password login profile failed");
+        await recordAuthEvent("password_profile_failed", req, { email, status: "failed" });
+        return clientError(
+          res,
+          status,
+          publicMessageFromErr(err, "Не удалось завершить вход", { context: "авторизация" }),
+        );
+      }
+
+      const userUuid = extractUserUuid(profile);
+      if (!userUuid || userUuid !== credential.userUuid) {
+        await recordAuthEvent("password_profile_invalid", req, { email, status: "failed" });
+        return clientError(res, 502, "Не удалось завершить вход");
+      }
+
+      const sid = base64url(randomBytes(32));
+      const csrf = base64url(randomBytes(32));
+      const expAt = Date.now() + SESSION_TTL_SEC * 1000;
+      const session = { userUuid, email, csrf, expAt, authVersion: credential.version };
+      const outcome = await saveLoginSession(email, userUuid, credential.version, sid, session, SESSION_TTL_SEC);
+      if (outcome !== "ok") return clientError(res, 409, "Пароль был изменён. Повторите вход");
+      setSessionCookies(res, sid, csrf);
+
+      req.log.info(
+        { emailHash: emailHash(email), userUuidPrefix: userUuid.slice(0, 8) },
+        "password login ok",
+      );
+      await recordAuthEvent("login_ok", req, { email, userUuid, status: "ok" });
+      return res.json(profile);
+    } catch (err) {
+      return serverError(res, req, err);
     }
   });
 
@@ -123,7 +235,8 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
 
         const code = generateOtpCode();
         const hash = hashCode(code);
-        await putOtp(email, hash, owner);
+        const authVersion = credentialVersion(await getCredential(email));
+        await putOtp(email, hash, owner, authVersion);
         const [otpDebug, cooldownDebug] = await Promise.all([
           getOtpDebugSnapshot(email),
           getCooldownDebugSnapshot(email),
@@ -192,7 +305,8 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
       const parsed = verifySchema.safeParse(req.body);
       if (!parsed.success) {
         await recordAuthEvent("verify_invalid_request", req, { status: "rejected" });
-        return clientError(res, 400, "Некорректный запрос");
+        const passwordIssue = parsed.error.issues.find((issue) => issue.path[0] === "newPassword");
+        return clientError(res, 400, passwordIssue?.message || "Некорректный запрос");
       }
       const { email, code } = parsed.data;
 
@@ -240,6 +354,11 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
 
       await recordDailyAuth("confirmed", email, req);
 
+      const newPassword = parsed.data.newPassword;
+      if (newPassword && otpResult.authVersion !== 0) {
+        return clientError(res, 409, "Пароль уже задан. Войдите и измените его в личном кабинете");
+      }
+
       const referrerUuid = parsed.data.ref_uuid;
       let referralBlocked = false;
       if (referrerUuid && isReferralPointsBlocked) {
@@ -272,10 +391,35 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
       const sid = base64url(randomBytes(32));
       const csrf = base64url(randomBytes(32));
       const expAt = Date.now() + SESSION_TTL_SEC * 1000;
+      const session = {
+        userUuid,
+        email,
+        csrf,
+        expAt,
+        authVersion: otpResult.authVersion + (newPassword ? 1 : 0),
+      };
 
-      await saveSession(sid, { userUuid, email, csrf, expAt });
+      // The session is written only if the password credential is still the
+      // version the code was issued for (and, for a new password, still absent).
+      const outcome = newPassword
+        ? await saveInitialPassword(
+            email,
+            sid,
+            { userUuid, version: 1, ...(await hashPassword(newPassword)) },
+            session,
+            SESSION_TTL_SEC,
+          )
+        : await saveLoginSession(email, userUuid, otpResult.authVersion, sid, session, SESSION_TTL_SEC);
+      if (outcome !== "ok") {
+        await deleteOtp(email);
+        await recordAuthEvent("verify_auth_changed", req, { email, status: "failed" });
+        return clientError(res, 409, "Данные входа изменились. Запросите новый код");
+      }
       setSessionCookies(res, sid, csrf);
       await deleteOtp(email);
+      if (newPassword) {
+        await recordAuthEvent("password_set", req, { email, userUuid, status: "ok" });
+      }
 
       req.log.info(
         { emailHash: emailHash(email), userUuidPrefix: userUuid.slice(0, 8) },
@@ -326,6 +470,88 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
       return serverError(res, req, err);
     }
   });
+
+  router.post(
+    "/api/auth/password/send-code",
+    requireSession,
+    sendCodeIpMinuteLimiter,
+    passwordChangeEmailLimiter,
+    async (req, res) => {
+      try {
+        const { sid, email } = req.session;
+        const owner = base64url(randomBytes(16));
+        const cooldown = passwordCooldownKey(sid);
+        if ((await redis.set(cooldown, owner, "EX", OTP_COOLDOWN_SEC, "NX")) !== "OK") {
+          const ttlSec = await redis.ttl(cooldown);
+          const retryAfterSec = ttlSec > 0 ? ttlSec : OTP_COOLDOWN_SEC;
+          res.set("Retry-After", String(retryAfterSec));
+          return clientError(res, 429, formatOtpResendCooldownMessage(retryAfterSec), { retryAfterSec });
+        }
+
+        const code = generateOtpCode();
+        await redis.set(
+          passwordOtpKey(sid),
+          JSON.stringify({
+            hash: hashCode(code),
+            tries: 0,
+            authVersion: credentialVersion(await getCredential(email)),
+            owner,
+          }),
+          "EX",
+          OTP_TTL_SEC,
+        );
+
+        const mailResult = await mailer.sendOtpEmail({ email, code, purpose: "password_change" });
+        if (!mailResult.ok) {
+          const existing = await redis.get(passwordOtpKey(sid));
+          if (existing && JSON.parse(existing).owner === owner) await redis.del(passwordOtpKey(sid));
+          if ((await redis.get(cooldown)) === owner) await redis.del(cooldown);
+          await recordAuthEvent("password_code_mail_failed", req, { email, status: "failed" });
+          req.log.warn(
+            { emailHash: emailHash(email), mailerError: mailResult.error, mailerDetail: mailResult.detail },
+            "password send-code mailer failed",
+          );
+          return res.status(502).json({ error: "Не удалось отправить код" });
+        }
+
+        await recordAuthEvent("password_code_sent", req, { email, status: "ok" });
+        return res.json({ ok: true, retryAfterSec: OTP_COOLDOWN_SEC });
+      } catch (err) {
+        return serverError(res, req, err);
+      }
+    },
+  );
+
+  router.post(
+    "/api/auth/password/change",
+    requireSession,
+    verifyIpLimiter,
+    passwordChangeAttemptLimiter,
+    async (req, res) => {
+      try {
+        const parsed = passwordChangeSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return clientError(res, 400, parsed.error.issues[0]?.message || "Некорректный пароль или код");
+        }
+        const hashed = await hashPassword(parsed.data.newPassword);
+        const outcome = await changePassword(req.session.email, req.session.sid, parsed.data.code, hashed);
+        if (outcome === "ok") {
+          await recordAuthEvent("password_changed", req, {
+            email: req.session.email,
+            userUuid: req.session.userUuid,
+            status: "ok",
+          });
+          return res.json({ ok: true, hasPassword: true });
+        }
+        if (outcome === "bad_code") return clientError(res, 400, "Неверный код");
+        if (outcome === "too_many_tries") return clientError(res, 410, "Слишком много попыток. Запросите новый код.");
+        if (outcome === "missing") return clientError(res, 400, "Код истёк или не найден. Запросите новый код");
+        return clientError(res, 409, "Данные изменились. Запросите новый код");
+      } catch (err) {
+        return serverError(res, req, err);
+      }
+    },
+  );
 
   router.post("/api/auth/logout", requireSession, async (req, res) => {
     await deleteSession(req.session.sid);

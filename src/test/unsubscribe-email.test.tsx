@@ -39,7 +39,7 @@ describe("UnsubscribeEmail", () => {
   it("requires text for other reason", () => {
     renderUnsubscribe();
 
-    fireEvent.click(screen.getByLabelText(/Другое/i));
+    fireEvent.click(screen.getByLabelText(/^Другое/));
     fireEvent.click(screen.getByRole("button", { name: /продолжить/i }));
 
     expect(screen.getByText("Укажите причину отписки")).toBeInTheDocument();

@@ -9,6 +9,7 @@ import { redis } from "../redis.mjs";
 import { clientError } from "../http/errors.mjs";
 import { timingSafeEqualStr } from "./crypto.mjs";
 import { sessionKey } from "./keys.mjs";
+import { credentialVersion, getCredential } from "./password.mjs";
 
 export function setSessionCookies(res, sid, csrf) {
   const common = {
@@ -61,6 +62,24 @@ export async function loadSession(req, res, next) {
 
   const now = Date.now();
   if (session.expAt && now > session.expAt) {
+    await deleteSession(sid);
+    clearSessionCookies(res);
+    return clientError(res, 401, "Сессия истекла");
+  }
+
+  // Setting or changing a password bumps the credential version and revokes
+  // every session issued for an older version (or for another account UUID).
+  let credential;
+  try {
+    credential = await getCredential(session.email);
+  } catch (err) {
+    req.log?.error({ err }, "session credential lookup failed");
+    return clientError(res, 503, "Авторизация временно недоступна");
+  }
+  if (
+    (Number(session.authVersion) || 0) !== credentialVersion(credential) ||
+    (credential && credential.userUuid !== session.userUuid)
+  ) {
     await deleteSession(sid);
     clearSessionCookies(res);
     return clientError(res, 401, "Сессия истекла");

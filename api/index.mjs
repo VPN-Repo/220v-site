@@ -43,6 +43,7 @@ import { SESSION_COOKIE } from "./config.mjs";
 import { base64url, emailHash } from "./auth/crypto.mjs";
 import { createAuthRouter } from "./auth/routes.mjs";
 import { requireSession, getSession, requireAdminToken } from "./auth/session.mjs";
+import { getCredential } from "./auth/password.mjs";
 import { getMailerConfigSummary, sendOtpEmail, verifyMailerConfig } from "./mailer.mjs";
 import { registerTalkMeRoutes } from "./talkme-routes.mjs";
 import { trafficPurchaseRestriction } from "./billing/trafficEligibility.mjs";
@@ -920,7 +921,11 @@ async function fetchRmwAnnouncementText() {
   return null;
 }
 
-async function loadUserProfileForEmail(normalizedEmail, req, refUuid) {
+/**
+ * enrich=false skips device-count / subscription-URL lookups when only the
+ * account identity is needed (e.g. support assigning a password).
+ */
+async function loadUserProfileForEmail(normalizedEmail, req, refUuid, { enrich = true } = {}) {
   const rmwUrl = rmwBaseUrl();
   const rmwKey = rmwApiKey();
   if (!rmwUrl || !rmwKey) {
@@ -968,6 +973,7 @@ async function loadUserProfileForEmail(normalizedEmail, req, refUuid) {
   }
 
   if (isDashboardUserPayload(sessionData)) {
+    if (!enrich) return sessionData;
     await applyRmwDeviceCount(
       rmwUrl,
       rmwKey,
@@ -989,6 +995,7 @@ async function loadUserProfileForEmail(normalizedEmail, req, refUuid) {
   const { panelUser, exists } = extracted;
   const userResponse = buildUserResponse(panelUser, exists);
   const uuid = userResponse.user.userUuid;
+  if (!enrich) return userResponse;
   const enrichTasks = [
     applyRmwDeviceCount(rmwUrl, rmwKey, uuid, userResponse, PROFILE_ENRICH_TIMEOUT_MS),
   ];
@@ -1501,8 +1508,11 @@ app.get("/api/announcement", async (_req, res) => {
 
 app.get("/api/me", requireSession, async (req, res) => {
   try {
-    const profile = await loadUserProfileForEmail(req.session.email, req);
-    return res.json({ ...profile, email: req.session.email });
+    const [profile, credential] = await Promise.all([
+      loadUserProfileForEmail(req.session.email, req),
+      getCredential(req.session.email),
+    ]);
+    return res.json({ ...profile, email: req.session.email, hasPassword: Boolean(credential) });
   } catch (err) {
     const status = isTimeoutError(err) ? timeoutStatusCode(err) : err.status || 502;
     return clientError(

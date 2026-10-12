@@ -554,8 +554,8 @@ const Chat = () => {
   useEffect(() => {
     if (typeof document === "undefined") return;
 
-    let messagesTimer: ReturnType<typeof window.setInterval> | null = null;
-    let metaTimer: ReturnType<typeof window.setInterval> | null = null;
+    let messagesTimer: number | null = null;
+    let metaTimer: number | null = null;
 
     const stopPolling = () => {
       if (messagesTimer !== null) {

@@ -27,7 +27,7 @@ function checkout(product_key = "traffic_20gb", payment_method = 2) {
 }
 
 beforeEach(async () => {
-  await redis.flushall();
+  await redis.flushdb();
   await saveSession("traffic-test", { userUuid: uuid, email: "traffic@example.com", csrf: "test-csrf" });
   profile = { userUuid: uuid, tariff: "1month", plan: "1 Месяц", expireAt: new Date(Date.now() + 7 * 3600_000).toISOString() };
   checkoutCalls = [];

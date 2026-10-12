@@ -137,11 +137,11 @@ async function seedHighRiskRegistrations(uuid) {
 
 describe("referral admin summary", () => {
   before(async () => {
-    await redis.flushall();
+    await redis.flushdb();
   });
 
   beforeEach(async () => {
-    await redis.flushall();
+    await redis.flushdb();
     globalThis.fetch = originalFetch;
   });
 

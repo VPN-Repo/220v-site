@@ -1,8 +1,14 @@
+import { createHash } from "node:crypto";
+
 const PREFIX = "v220:";
 
 export const sessionKey = (sid) => `${PREFIX}sess:${sid}`;
 export const otpKey = (email) => `${PREFIX}otp:${email}`;
 export const otpCooldownKey = (email) => `${PREFIX}otp:cooldown:${email}`;
+// Password credentials are keyed by an email hash so the address is not stored in the key name.
+export const credentialKey = (email) => `${PREFIX}cred:${createHash("sha256").update(email).digest("hex")}`;
+export const passwordOtpKey = (sid) => `${PREFIX}password:otp:${sid}`;
+export const passwordCooldownKey = (sid) => `${PREFIX}password:otp:cooldown:${sid}`;
 
 export const refEventsListKey = () => `${PREFIX}ref:events`;
 export const refEventsReferrerIndexKey = (refUuid) => `${PREFIX}ref:events:by_referrer:${refUuid}`;

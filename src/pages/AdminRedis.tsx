@@ -4,6 +4,7 @@ import { apiBase } from "@/lib/api";
 import { formatUserError } from "@/lib/errorMessages";
 import { ADMIN_TOKEN_STORAGE_KEY } from "@/lib/admin";
 import AdminPageShell from "@/components/AdminPageShell";
+import AdminSetPasswordForm from "@/components/AdminSetPasswordForm";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type CounterEntry = { key: string; count: number };
@@ -533,6 +534,7 @@ export default function AdminRedis() {
       error={error}
       updatedAt={snapshot?.generatedAt}
     >
+        <AdminSetPasswordForm token={token} />
         {snapshot && (
           <>
             <DailyAuthStats data={snapshot.dailyAuth} token={token} />

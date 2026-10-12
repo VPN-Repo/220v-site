@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { OTP_COOLDOWN_SEC, OTP_MAX_TRIES, OTP_TTL_SEC } from "../config.mjs";
-import { redis } from "../redis.mjs";
+import { redis, isMockRedis } from "../redis.mjs";
 import { hashCode } from "./crypto.mjs";
 import { otpCooldownKey, otpKey } from "./keys.mjs";
 
@@ -28,10 +28,14 @@ export async function getOtpCooldownRemainingSec(email) {
   return ttlSec > 0 ? ttlSec : 0;
 }
 
-export async function putOtp(email, codeHash, owner) {
+/**
+ * authVersion is the password credential version at issue time: a code sent
+ * before a password set/change cannot be used to log in afterwards.
+ */
+export async function putOtp(email, codeHash, owner, authVersion = 0) {
   await redis.set(
     otpKey(email),
-    JSON.stringify({ hash: codeHash, tries: 0, owner }),
+    JSON.stringify({ hash: codeHash, tries: 0, owner, authVersion }),
     "EX",
     OTP_TTL_SEC,
   );
@@ -66,6 +70,13 @@ export async function getCooldownDebugSnapshot(email) {
 }
 
 export async function clearOtpAndCooldown(email, owner) {
+  if (isMockRedis) {
+    // ioredis-mock has no cjson in Lua; same owner-checked cleanup in JS for tests.
+    const { parsed } = parseOtpPayload(await redis.get(otpKey(email)));
+    if (parsed?.owner === owner) await redis.del(otpKey(email));
+    if ((await redis.get(otpCooldownKey(email))) === owner) await redis.del(otpCooldownKey(email));
+    return;
+  }
   await redis.eval(
     `
 local otpKey = KEYS[1]
@@ -91,7 +102,7 @@ return 1
 }
 
 /**
- * @returns {Promise<{ ok: true } | { ok: false, reason: string, status: number, tries?: number }>}
+ * @returns {Promise<{ ok: true, authVersion: number } | { ok: false, reason: string, status: number, tries?: number }>}
  */
 export async function verifyOtp(email, code) {
   const key = otpKey(email);
@@ -127,7 +138,7 @@ export async function verifyOtp(email, code) {
     return { ok: false, reason: "bad_code", status: 400, tries };
   }
 
-  return { ok: true };
+  return { ok: true, authVersion: Number(otp.authVersion) || 0 };
 }
 
 export async function deleteOtp(email) {
@@ -135,11 +146,11 @@ export async function deleteOtp(email) {
 }
 
 /**
- * @returns {Promise<{ ok: true } | { ok: false, reason: string, status: number, tries?: number }>}
+ * @returns {Promise<{ ok: true, authVersion: number } | { ok: false, reason: string, status: number, tries?: number }>}
  */
 export async function consumeOtp(email, code) {
   const result = await verifyOtp(email, code);
   if (!result.ok) return result;
   await deleteOtp(email);
-  return { ok: true };
+  return result;
 }

@@ -18,6 +18,8 @@ import {
   setPendingPromoCode,
 } from "@/lib/vpnStorage";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import PasswordVisibilityButton from "@/components/PasswordVisibilityButton";
+import { isValidNewPassword, PASSWORD_REQUIREMENTS, SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/password";
 
 import LandingShell from "@/pages/landing/LandingShell";
 import LandingHeader from "@/pages/landing/LandingHeader";
@@ -97,11 +99,17 @@ async function getBrowserFingerprint(): Promise<string> {
   }
 }
 
-type LoginStep = "email" | "verify";
+type LoginStep = "email" | "password" | "verify";
 
 const Index = () => {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [repeatPassword, setRepeatPassword] = useState("");
+  const [settingPassword, setSettingPassword] = useState(false);
+  const [hasPassword, setHasPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [loginStep, setLoginStep] = useState<LoginStep>("email");
   const [loginOpen, setLoginOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -187,9 +195,19 @@ const Index = () => {
     return () => window.clearTimeout(timer);
   }, [resendCooldownSec]);
 
+  const resetPasswordFields = () => {
+    setPassword("");
+    setNewPassword("");
+    setRepeatPassword("");
+    setSettingPassword(false);
+    setShowPassword(false);
+  };
+
   const openLogin = () => {
     setLoginStep("email");
     setCode("");
+    resetPasswordFields();
+    setHasPassword(false);
     setResendCooldownSec(0);
     setLoginOpen(true);
   };
@@ -203,6 +221,7 @@ const Index = () => {
   const closeLogin = () => {
     if (loading) return;
     setCode("");
+    resetPasswordFields();
     setResendCooldownSec(0);
     setLoginOpen(false);
   };
@@ -262,8 +281,68 @@ const Index = () => {
     }
   };
 
-  const handleStart = () => {
-    void handleSendCode();
+  const completeLogin = async (refUuid?: string | null) => {
+    if (refUuid) {
+      consumePendingRefUuid();
+    }
+    persistChatCompatCache({ email: normalizedEmail });
+    await refreshSession();
+    navigate(hrefAfterLoginFromPendingSearch());
+  };
+
+  // Сначала узнаём способ входа: если у аккаунта есть пароль — показываем шаг
+  // пароля, иначе отправляем код как раньше. Ошибка проверки не блокирует вход
+  // по коду.
+  const handleStart = async () => {
+    if (sendingRef.current) return;
+    if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      toast({ title: "Ошибка", description: "Укажите корректный email", variant: "destructive" });
+      return;
+    }
+
+    sendingRef.current = true;
+    setLoading(true);
+    let accountHasPassword = false;
+    try {
+      const { data, error } = await apiPost<{ hasPassword?: boolean }>("/auth/method", { email: normalizedEmail });
+      accountHasPassword = !error && Boolean(data?.hasPassword);
+    } catch {
+      accountHasPassword = false;
+    } finally {
+      sendingRef.current = false;
+      setLoading(false);
+    }
+
+    setHasPassword(accountHasPassword);
+    resetPasswordFields();
+    if (accountHasPassword) {
+      setLoginStep("password");
+      return;
+    }
+    await handleSendCode();
+  };
+
+  const handlePasswordLogin = async () => {
+    if (!password) {
+      toast({ title: "Ошибка", description: "Введите пароль", variant: "destructive" });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await apiPost<{ user?: unknown; error?: string }>("/auth/login-password", {
+        email: normalizedEmail,
+        password,
+      });
+      if (error) throw error;
+      if (!data?.user) throw new Error(data?.error || "Не удалось завершить вход");
+      setPassword("");
+      await completeLogin();
+    } catch (err: unknown) {
+      toast({ title: "Ошибка", description: err instanceof Error ? err.message : "Ошибка входа", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleVerify = async () => {
@@ -271,14 +350,31 @@ const Index = () => {
       toast({ title: "Ошибка", description: "Введите код подтверждения", variant: "destructive" });
       return;
     }
+    if (settingPassword && !isValidNewPassword(newPassword)) {
+      toast({ title: "Ошибка", description: PASSWORD_REQUIREMENTS, variant: "destructive" });
+      return;
+    }
+    if (settingPassword && newPassword !== repeatPassword) {
+      toast({ title: "Ошибка", description: "Пароли не совпадают", variant: "destructive" });
+      return;
+    }
 
     setLoading(true);
     try {
       const refUuid = peekPendingRefUuid();
-      const verifyBody: { email: string; code: string; ref_uuid?: string; fingerprint?: string } = {
+      const verifyBody: {
+        email: string;
+        code: string;
+        ref_uuid?: string;
+        fingerprint?: string;
+        newPassword?: string;
+      } = {
         email: normalizedEmail,
         code,
       };
+      if (settingPassword) {
+        verifyBody.newPassword = newPassword;
+      }
       if (refUuid) {
         verifyBody.ref_uuid = refUuid;
         const fingerprint = await getBrowserFingerprint();
@@ -292,12 +388,8 @@ const Index = () => {
       if (error) throw error;
 
       if (data?.user) {
-        if (refUuid) {
-          consumePendingRefUuid();
-        }
-        persistChatCompatCache({ email: normalizedEmail });
-        await refreshSession();
-        navigate(hrefAfterLoginFromPendingSearch());
+        resetPasswordFields();
+        await completeLogin(refUuid);
       } else {
         toast({ title: "Ошибка", description: data?.error || "Неверный код", variant: "destructive" });
       }
@@ -591,11 +683,13 @@ const Index = () => {
       <LandingModal
         open={loginOpen}
         onClose={closeLogin}
-        title={loginStep === "email" ? "Вход в 220v" : "Введите код"}
+        title={loginStep === "email" ? "Вход в 220v" : loginStep === "password" ? "Введите пароль" : "Введите код"}
         subtitle={
           loginStep === "email"
             ? "Мы отправим код подтверждения на вашу почту"
-            : `Код отправлен на ${normalizedEmail}`
+            : loginStep === "password"
+              ? `Пароль для ${normalizedEmail}`
+              : `Код отправлен на ${normalizedEmail}`
         }
       >
         {loginStep === "email" ? (
@@ -616,7 +710,7 @@ const Index = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleStart();
+                  if (e.key === "Enter") void handleStart();
                 }}
                 disabled={loading}
               />
@@ -625,15 +719,122 @@ const Index = () => {
               <button
                 type="button"
                 className="btn btn--primary btn--wide"
-                onClick={handleStart}
+                onClick={() => void handleStart()}
                 disabled={loading}
               >
-                {loading ? "Отправка..." : "Отправить код"}
+                {loading ? "Отправка..." : "Продолжить"}
               </button>
             </div>
           </div>
+        ) : loginStep === "password" ? (
+          <form
+            className="login-card"
+            style={{ background: "transparent", border: 0, padding: 0, boxShadow: "none" }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!loading) void handlePasswordLogin();
+            }}
+          >
+            <input type="email" name="email" autoComplete="username" value={normalizedEmail} readOnly hidden />
+            <div className="form-field">
+              <label htmlFor="login-password">Пароль</label>
+              <div className="password-field">
+                <input
+                  id="login-password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  placeholder="Пароль"
+                  enterKeyHint="go"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
+                  autoFocus
+                />
+                <PasswordVisibilityButton
+                  visible={showPassword}
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+            <div className="form-actions">
+              <button type="submit" className="btn btn--primary btn--wide" disabled={loading || !password}>
+                {loading ? "Проверка..." : "Войти"}
+              </button>
+            </div>
+            <p className="form-link">
+              <button
+                type="button"
+                onClick={() => {
+                  setPassword("");
+                  void handleSendCode();
+                }}
+                disabled={loading || resendCooldownSec > 0}
+              >
+                {resendCooldownSec > 0
+                  ? formatResendCooldownButtonLabel(resendCooldownSec)
+                  : "Войти по коду из email"}
+              </button>
+            </p>
+            <p className="form-link">
+              <button
+                type="button"
+                onClick={() => {
+                  resetPasswordFields();
+                  setLoginStep("email");
+                }}
+                disabled={loading}
+              >
+                ← Изменить email
+              </button>
+            </p>
+            <p className="login-support-hint">
+              Забыли пароль и нет доступа к почте? Если аккаунт уже есть, напишите в поддержку на{" "}
+              <a href={SUPPORT_MAILTO} className="modal__link">
+                {SUPPORT_EMAIL}
+              </a>{" "}
+              — после проверки вам установят пароль для входа.
+            </p>
+          </form>
         ) : (
           <div className="login-card" style={{ background: "transparent", border: 0, padding: 0, boxShadow: "none" }}>
+            {settingPassword ? (
+              <div className="login-password-fields">
+                <div className="password-field">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    aria-label="Новый пароль"
+                    placeholder="6–128 символов, буквы и цифры"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    disabled={loading}
+                  />
+                  <PasswordVisibilityButton
+                    visible={showPassword}
+                    onClick={() => setShowPassword(!showPassword)}
+                    disabled={loading}
+                  />
+                </div>
+                <div className="password-field">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    aria-label="Повторите пароль"
+                    placeholder="Повторите пароль"
+                    value={repeatPassword}
+                    onChange={(e) => setRepeatPassword(e.target.value)}
+                    disabled={loading}
+                  />
+                  <PasswordVisibilityButton
+                    visible={showPassword}
+                    onClick={() => setShowPassword(!showPassword)}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+            ) : null}
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
               <InputOTP
                 maxLength={5}
@@ -660,6 +861,23 @@ const Index = () => {
                 {loading ? "Проверка..." : "Подтвердить"}
               </button>
             </div>
+            {!hasPassword ? (
+              <div className="login-password-optional">
+                <p>Пароль задавать необязательно — с ним можно входить без кода из письма</p>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--wide"
+                  disabled={loading}
+                  onClick={() => {
+                    setSettingPassword(!settingPassword);
+                    setNewPassword("");
+                    setRepeatPassword("");
+                  }}
+                >
+                  {settingPassword ? "Продолжить без пароля" : "Задать пароль"}
+                </button>
+              </div>
+            ) : null}
             <p className="form-link">
               <button
                 type="button"
@@ -678,12 +896,20 @@ const Index = () => {
                 type="button"
                 onClick={() => {
                   setCode("");
+                  resetPasswordFields();
                   setLoginStep("email");
                 }}
                 disabled={loading}
               >
                 ← Изменить email
               </button>
+            </p>
+            <p className="login-support-hint">
+              Не приходит код или нет доступа к почте? Если аккаунт уже есть, напишите в поддержку на{" "}
+              <a href={SUPPORT_MAILTO} className="modal__link">
+                {SUPPORT_EMAIL}
+              </a>{" "}
+              — после проверки вам установят пароль для входа.
             </p>
           </div>
         )}

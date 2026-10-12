@@ -2,7 +2,7 @@ import rateLimit from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 import { SESSION_COOKIE } from "../config.mjs";
 import { redis } from "../redis.mjs";
-import { sendCodeSchema } from "../auth/schemas.mjs";
+import { methodSchema, sendCodeSchema } from "../auth/schemas.mjs";
 
 function makeRateLimit(opts) {
   const base = {
@@ -52,6 +52,54 @@ export const verifyIpLimiter = makeRateLimit({
   max: 150,
   prefix: "v220:rl:verify:ip:",
   message: { error: "Слишком много попыток проверки. Попробуйте позже." },
+});
+
+export const authMethodLimiter = makeRateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  prefix: "v220:rl:method:ip:",
+  message: { error: "Слишком много запросов. Попробуйте позже." },
+});
+
+export const passwordIpLimiter = makeRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  prefix: "v220:rl:password:ip:",
+  message: { error: "Слишком много попыток входа. Попробуйте позже." },
+});
+
+export const passwordEmailLimiter = makeRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  prefix: "v220:rl:password:email:",
+  keyGenerator: (req) => {
+    const parsed = methodSchema.safeParse(req.body);
+    return parsed.success ? parsed.data.email : req.ip;
+  },
+  message: { error: "Слишком много попыток входа. Попробуйте позже." },
+});
+
+export const passwordChangeEmailLimiter = makeRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  prefix: "v220:rl:password:change:email:",
+  keyGenerator: (req) => req.session?.email || req.ip,
+  message: { error: "Слишком много запросов кода. Попробуйте позже." },
+});
+
+export const passwordChangeAttemptLimiter = makeRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  prefix: "v220:rl:password:change:attempt:",
+  keyGenerator: (req) => req.session?.email || req.ip,
+  message: { error: "Слишком много попыток. Попробуйте позже." },
+});
+
+export const adminPasswordLimiter = makeRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  prefix: "v220:rl:admin:password:ip:",
+  message: { error: "Слишком много запросов. Попробуйте позже." },
 });
 
 export const checkoutSessionLimiter = makeRateLimit({

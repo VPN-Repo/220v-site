@@ -23,6 +23,7 @@ import {
   MoreHorizontal,
   CheckCircle2,
   AlertTriangle,
+  KeyRound,
 } from "lucide-react";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { useSession } from "@/hooks/useSession";
@@ -44,6 +45,7 @@ import { oneClickHappUrl, isInstructionsPlatform, type InstructionsPlatform } fr
 import LandingShell from "@/pages/landing/LandingShell";
 import LandingFooter from "@/pages/landing/LandingFooter";
 import DashboardSidebar, { type DashboardSidebarItem } from "@/components/DashboardSidebar";
+import PasswordDialog from "@/components/PasswordDialog";
 import { SIDEBAR_SHOW_OTHER, SIDEBAR_SHOW_REFERRALS } from "@/hooks/useDashboardSidebarItems";
 
 interface UserData {
@@ -216,6 +218,8 @@ const Dashboard = () => {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [promoCode, setPromoCode] = useState("");
   const [subscriptionQrOpen, setSubscriptionQrOpen] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [hasPassword, setHasPassword] = useState(false);
   const copySubscriptionButtonRef = useRef<HTMLButtonElement>(null);
   const autoPromoAttemptRef = useRef("");
 
@@ -285,10 +289,11 @@ const Dashboard = () => {
 
     const fetchUser = async () => {
       try {
-        const { data, error: fnError } = await apiGet<{ user?: unknown; error?: string; exists?: boolean }>("/me");
+        const { data, error: fnError } = await apiGet<{ user?: unknown; error?: string; exists?: boolean; hasPassword?: boolean }>("/me");
 
         if (fnError) throw fnError;
         if (data?.user) {
+          setHasPassword(Boolean(data.hasPassword));
           const normalizedUser = normalizeUserData(data.user);
           if (!normalizedUser) {
             setError("Некорректный формат данных пользователя");
@@ -335,7 +340,7 @@ const Dashboard = () => {
     if (!userData?.userUuid) return;
     setDevicesLoading(true);
     try {
-      const { data, error } = await apiGet<{ devices?: Device[]; total?: number }>("/me/devices");
+      const { data, error } = await apiGet<{ devices?: HwidDevice[]; total?: number }>("/me/devices");
       if (!error && data?.devices) {
         setDevices(data.devices);
         const devicesCount = Array.isArray(data.devices) ? data.devices.length : 0;
@@ -365,11 +370,12 @@ const Dashboard = () => {
 
   const refreshUserData = useCallback(async () => {
     if (!email) return;
-    const { data, error: fnError } = await apiGet<{ user?: unknown; error?: string; exists?: boolean }>("/me");
+    const { data, error: fnError } = await apiGet<{ user?: unknown; error?: string; exists?: boolean; hasPassword?: boolean }>("/me");
     if (fnError) throw fnError;
     if (!data?.user) {
       throw new Error(data?.error || "Не удалось получить данные");
     }
+    setHasPassword(Boolean(data.hasPassword));
     const normalizedUser = normalizeUserData(data.user);
     if (!normalizedUser) {
       throw new Error("Некорректный формат данных пользователя");
@@ -870,6 +876,14 @@ const Dashboard = () => {
                 <div className="dash-topbar__kicker">Личный кабинет 220v</div>
                 <h1 className="dash-topbar__title">С возвращением</h1>
                 {email ? <div className="dash-topbar__email">{email}</div> : null}
+                <button
+                  type="button"
+                  className="dash-topbar__password"
+                  onClick={() => setPasswordDialogOpen(true)}
+                >
+                  <KeyRound className="h-4 w-4" aria-hidden="true" />
+                  {hasPassword ? "Сменить пароль" : "Задать пароль"}
+                </button>
               </div>
               <span
                 className={`dash-badge ${isExpired ? "dash-badge--danger" : "dash-badge--ok"}`}
@@ -1314,6 +1328,17 @@ const Dashboard = () => {
               className="dash-modal-btn dash-modal-btn--ghost dash-modal-btn--menu"
               onClick={() => {
                 setOtherMenuOpen(false);
+                setPasswordDialogOpen(true);
+              }}
+            >
+              <KeyRound className="h-5 w-5" />
+              {hasPassword ? "Сменить пароль" : "Задать пароль"}
+            </button>
+            <button
+              type="button"
+              className="dash-modal-btn dash-modal-btn--ghost dash-modal-btn--menu"
+              onClick={() => {
+                setOtherMenuOpen(false);
                 window.open("https://t.me/vpn220v_bot", "_blank", "noopener,noreferrer");
               }}
             >
@@ -1331,6 +1356,13 @@ const Dashboard = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <PasswordDialog
+        open={passwordDialogOpen}
+        onOpenChange={setPasswordDialogOpen}
+        hasPassword={hasPassword}
+        onChanged={() => setHasPassword(true)}
+      />
 
       {/* Promo Code Modal */}
       <Dialog open={promoOpen} onOpenChange={setPromoOpen}>

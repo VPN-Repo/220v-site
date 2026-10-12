@@ -47,7 +47,7 @@ const unfinished = (query = "") => request(app).get(`/api/admin/redis-auth/unfin
 
 describe("daily auth statistics", () => {
   beforeEach(async () => {
-    await redis.flushall();
+    await redis.flushdb();
     deliveredCode = "";
     mailFails = false;
     profileFails = false;

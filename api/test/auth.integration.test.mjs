@@ -77,11 +77,11 @@ async function requestJsonWithSession(method, path, body, sessionData = {}) {
 
 describe("auth integration", () => {
   before(async () => {
-    await redis.flushall();
+    await redis.flushdb();
   });
 
   beforeEach(async () => {
-    await redis.flushall();
+    await redis.flushdb();
     globalThis.fetch = originalFetch;
   });
 
