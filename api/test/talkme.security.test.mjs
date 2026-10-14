@@ -145,11 +145,25 @@ describe("talkme security", () => {
     assert.equal(res.status, 403);
   });
 
+  it("uses Talk-Me routes when Chatwoot env is unset", async () => {
+    assert.equal(process.env.CHATWOOT_BASE_URL, undefined);
+    const provider = await request(app).get("/api/chat/provider");
+    assert.equal(provider.status, 200);
+    assert.equal(provider.body.provider, "talkme");
+
+    const { agent } = await createSessionAgent();
+    const ops = await agent.post("/api/talkme/operator-list").send({});
+    assert.equal(ops.status, 200);
+    assert.equal(ops.body.onlineCount, 0);
+    assert.equal(ops.body.supported, undefined);
+  });
+
   it("POST /api/talkme/client-id with valid session returns clientId", async () => {
     const { agent, clientId } = await createSessionAgent();
     const res = await agent.post("/api/talkme/client-id").send({});
     assert.equal(res.status, 200);
     assert.equal(res.body.clientId, clientId);
+    assert.equal(res.body.provider, "talkme");
   });
 
   it("POST /api/talkme/messages with foreign clientId returns 403", async () => {

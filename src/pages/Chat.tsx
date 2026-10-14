@@ -34,8 +34,12 @@ type ChatMessage = {
   attachments?: ChatAttachment[];
 };
 
+type ChatProvider = "talkme" | "chatwoot";
+
 type ClientIdResponse = {
   clientId?: string;
+  /** Провайдер за `/api/talkme/*`; старый бэкенд поле не отдаёт — это Talk-Me. */
+  provider?: ChatProvider;
 };
 
 type MessagesResponse = {
@@ -61,7 +65,9 @@ type DialogStatusResponse = {
 };
 
 type OperatorListResponse = {
-  onlineCount?: number;
+  onlineCount?: number | null;
+  /** `false` — провайдер не умеет считать операторов онлайн (Chatwoot): бейдж прячем. */
+  supported?: boolean;
 };
 
 type OperatorTypingResponse = {
@@ -362,6 +368,7 @@ const Chat = () => {
   const [error, setError] = useState<string | null>(null);
   const [statusLabel, setStatusLabel] = useState<string | null>(null);
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
+  const [operatorsSupported, setOperatorsSupported] = useState(true);
   const [operatorTyping, setOperatorTyping] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [lightboxImage, setLightboxImage] = useState<ChatAttachment | null>(null);
@@ -463,7 +470,10 @@ const Chat = () => {
   const refreshMeta = useCallback(async () => {
     const requests: Promise<void>[] = [
       talkmePost<OperatorListResponse>("/talkme/operator-list", {}, handleAuthError)
-        .then((data) => setOnlineCount(typeof data.onlineCount === "number" ? data.onlineCount : null))
+        .then((data) => {
+          setOperatorsSupported(data.supported !== false);
+          setOnlineCount(typeof data.onlineCount === "number" ? data.onlineCount : null);
+        })
         .catch(() => setOnlineCount(null)),
     ];
 
@@ -502,6 +512,8 @@ const Chat = () => {
         if (!syntheticClientId) return;
 
         setClientId((prev) => prev || syntheticClientId);
+        // Виджет Talk-Me нужен только с провайдером Talk-Me: с Chatwoot всё идёт через наш API.
+        if (data.provider === "chatwoot") return;
         ensureTalkMeScript({ clientId: syntheticClientId });
 
         const syncClientInfo = () => {
@@ -751,8 +763,11 @@ const Chat = () => {
     }
   };
 
-  const operatorMobileHint =
-    onlineCount === null ? "Операторы онлайн: проверяем" : `Операторы онлайн: ${onlineCount}`;
+  const operatorMobileHint = !operatorsSupported
+    ? "Поддержка 220v"
+    : onlineCount === null
+      ? "Операторы онлайн: проверяем"
+      : `Операторы онлайн: ${onlineCount}`;
 
   return (
     <LandingShell
@@ -801,13 +816,15 @@ const Chat = () => {
                     <h2 className="support-card__title">Диалог с оператором</h2>
                   </div>
                   <div className="support2-chat__badges" aria-label="Статус чата">
-                    <span className="support2-chat__badge support2-chat__badge--operators">
-                      {onlineCount === null
-                        ? "Операторы: проверяем"
-                        : onlineCount > 0
-                          ? `Операторы онлайн: ${onlineCount}`
-                          : "Операторы офлайн"}
-                    </span>
+                    {operatorsSupported ? (
+                      <span className="support2-chat__badge support2-chat__badge--operators">
+                        {onlineCount === null
+                          ? "Операторы: проверяем"
+                          : onlineCount > 0
+                            ? `Операторы онлайн: ${onlineCount}`
+                            : "Операторы офлайн"}
+                      </span>
+                    ) : null}
                     {statusLabel ? <span className="support2-chat__badge">{statusLabel}</span> : null}
                   </div>
                 </div>

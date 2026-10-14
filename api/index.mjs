@@ -46,6 +46,7 @@ import { requireSession, getSession, requireAdminToken } from "./auth/session.mj
 import { getCredential } from "./auth/password.mjs";
 import { getMailerConfigSummary, sendOtpEmail, verifyMailerConfig } from "./mailer.mjs";
 import { registerTalkMeRoutes } from "./talkme-routes.mjs";
+import { getChatProvider, registerChatwootRoutes } from "./chatwoot-routes.mjs";
 import { trafficPurchaseRestriction } from "./billing/trafficEligibility.mjs";
 import {
   UnsubscribeTokenConfigError,
@@ -1978,7 +1979,20 @@ app.post("/api/checkout", requireSession, checkoutSessionLimiter, async (req, re
   }
 });
 
-registerTalkMeRoutes(app);
+// Провайдер чата поддержки: Chatwoot, если заданы CHATWOOT_BASE_URL и
+// CHATWOOT_INBOX_IDENTIFIER, иначе прежний Talk-Me. Пути `/api/talkme/*` общие.
+const chatProvider = getChatProvider();
+if (chatProvider === "chatwoot") {
+  registerChatwootRoutes(app);
+} else {
+  registerTalkMeRoutes(app);
+}
+logger.info({ chatProvider }, "support chat provider");
+
+app.get("/api/chat/provider", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  return res.json({ provider: chatProvider });
+});
 
 export { app };
 
