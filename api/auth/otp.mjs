@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { OTP_COOLDOWN_SEC, OTP_MAX_TRIES, OTP_TTL_SEC } from "../config.mjs";
+import { OTP_COOLDOWN_SEC, OTP_MAX_TRIES, OTP_PROVIDER_WINDOW_SEC, OTP_TTL_SEC } from "../config.mjs";
 import { redis, isMockRedis } from "../redis.mjs";
 import { hashCode } from "./crypto.mjs";
 import { otpCooldownKey, otpKey } from "./keys.mjs";
@@ -153,4 +153,25 @@ export async function consumeOtp(email, code) {
   if (!result.ok) return result;
   await deleteOtp(email);
   return result;
+}
+
+/**
+ * Picks the SMTP provider for an OTP email from the number of successful sends
+ * recorded under sendsKey: the first send in the window goes through the
+ * primary provider (SES), every later one (a resend) through the backup.
+ * The mailer itself falls back to primary when no backup is configured.
+ *
+ * @returns {Promise<"primary" | "backup">}
+ */
+export async function pickOtpMailProvider(sendsKey) {
+  const sent = Number(await redis.get(sendsKey)) || 0;
+  return sent > 0 ? "backup" : "primary";
+}
+
+/**
+ * Counts a successful OTP email send. The window is fixed from the first send:
+ * SET NX creates the counter with its TTL, INCR keeps that TTL.
+ */
+export async function recordOtpMailSend(sendsKey, windowSec = OTP_PROVIDER_WINDOW_SEC) {
+  await redis.multi().set(sendsKey, "0", "EX", windowSec, "NX").incr(sendsKey).exec();
 }

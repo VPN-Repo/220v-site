@@ -40,7 +40,9 @@ import {
   getCooldownDebugSnapshot,
   getOtpCooldownRemainingSec,
   getOtpDebugSnapshot,
+  pickOtpMailProvider,
   putOtp,
+  recordOtpMailSend,
   verifyOtp,
 } from "./otp.mjs";
 import {
@@ -62,7 +64,7 @@ import {
   saveLoginSession,
   verifyPassword,
 } from "./password.mjs";
-import { passwordCooldownKey, passwordOtpKey } from "./keys.mjs";
+import { otpMailSendsKey, passwordCooldownKey, passwordMailSendsKey, passwordOtpKey } from "./keys.mjs";
 import { listDailyUnfinishedEmails, recordDailyAuth } from "./dailyStats.mjs";
 import { recordReferralEvent } from "../referrals/events.mjs";
 import {
@@ -74,10 +76,30 @@ import {
 } from "./session.mjs";
 
 /**
- * @param {{ mailer: { sendOtpEmail: (opts: { email: string, code: string, purpose?: "login" | "password_change" }) => Promise<{ ok: boolean, error?: string, detail?: string, messageId?: string }> }, loadUserProfile: (email: string, req: import('express').Request, refUuid?: string, options?: { enrich?: boolean }) => Promise<object>, extractUserUuid: (profile: object) => string | null, isReferralPointsBlocked?: (refUuid: string) => Promise<boolean> }} deps
+ * @param {{ mailer: { sendOtpEmail: (opts: { email: string, code: string, purpose?: "login" | "password_change", provider?: "primary" | "backup" }) => Promise<{ ok: boolean, error?: string, detail?: string, messageId?: string, provider?: string, failover?: boolean }> }, loadUserProfile: (email: string, req: import('express').Request, refUuid?: string, options?: { enrich?: boolean }) => Promise<object>, extractUserUuid: (profile: object) => string | null, isReferralPointsBlocked?: (refUuid: string) => Promise<boolean> }} deps
  */
 export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isReferralPointsBlocked }) {
   const router = Router();
+
+  // The first OTP email in the window goes through SES, a resend through the
+  // backup SMTP. Redis trouble here must not block sending: fall back to primary.
+  const chooseMailProvider = async (req, sendsKey) => {
+    try {
+      return await pickOtpMailProvider(sendsKey);
+    } catch (err) {
+      req.log.warn({ err }, "otp mail provider lookup failed");
+      return "primary";
+    }
+  };
+  // Counted only after a provider accepted the email; a counter failure must
+  // not turn an already delivered code into an error response.
+  const countMailSend = async (req, sendsKey) => {
+    try {
+      await recordOtpMailSend(sendsKey);
+    } catch (err) {
+      req.log.warn({ err }, "otp mail send counter update failed");
+    }
+  };
 
   router.get("/api/admin/redis-auth", requireAdminToken, async (req, res) => {
     try {
@@ -251,7 +273,9 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
           "otp stored",
         );
 
-        const mailResult = await mailer.sendOtpEmail({ email, code });
+        const sendsKey = otpMailSendsKey(email);
+        const requestedProvider = await chooseMailProvider(req, sendsKey);
+        const mailResult = await mailer.sendOtpEmail({ email, code, provider: requestedProvider });
 
         if (!mailResult.ok) {
           await clearOtpAndCooldown(email, owner);
@@ -263,17 +287,30 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
               recipientDomain: domain,
               mailerError: mailResult.error,
               mailerDetail: mailResult.detail,
+              requestedProvider,
             },
             "send-code mailer failed",
           );
           return res.status(502).json({ error: "Не удалось отправить код" });
         }
 
+        await countMailSend(req, sendsKey);
         req.log.info(
-          { emailHash: emailHash(email), messageId: mailResult.messageId },
+          {
+            emailHash: emailHash(email),
+            messageId: mailResult.messageId,
+            requestedProvider,
+            provider: mailResult.provider,
+            failover: mailResult.failover,
+          },
           "send-code dispatched",
         );
-        await recordAuthEvent("send_code_sent", req, { email, status: "ok" });
+        await recordAuthEvent("send_code_sent", req, {
+          email,
+          status: "ok",
+          provider: mailResult.provider,
+          failover: mailResult.failover,
+        });
         await recordDailyAuth("sent", email, req);
 
         if (parsed.data.ref_uuid) {
@@ -501,20 +538,49 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
           OTP_TTL_SEC,
         );
 
-        const mailResult = await mailer.sendOtpEmail({ email, code, purpose: "password_change" });
+        // Keyed per session, like the cooldown of this flow.
+        const sendsKey = passwordMailSendsKey(sid);
+        const requestedProvider = await chooseMailProvider(req, sendsKey);
+        const mailResult = await mailer.sendOtpEmail({
+          email,
+          code,
+          purpose: "password_change",
+          provider: requestedProvider,
+        });
         if (!mailResult.ok) {
           const existing = await redis.get(passwordOtpKey(sid));
           if (existing && JSON.parse(existing).owner === owner) await redis.del(passwordOtpKey(sid));
           if ((await redis.get(cooldown)) === owner) await redis.del(cooldown);
           await recordAuthEvent("password_code_mail_failed", req, { email, status: "failed" });
           req.log.warn(
-            { emailHash: emailHash(email), mailerError: mailResult.error, mailerDetail: mailResult.detail },
+            {
+              emailHash: emailHash(email),
+              mailerError: mailResult.error,
+              mailerDetail: mailResult.detail,
+              requestedProvider,
+            },
             "password send-code mailer failed",
           );
           return res.status(502).json({ error: "Не удалось отправить код" });
         }
 
-        await recordAuthEvent("password_code_sent", req, { email, status: "ok" });
+        await countMailSend(req, sendsKey);
+        req.log.info(
+          {
+            emailHash: emailHash(email),
+            messageId: mailResult.messageId,
+            requestedProvider,
+            provider: mailResult.provider,
+            failover: mailResult.failover,
+          },
+          "password send-code dispatched",
+        );
+        await recordAuthEvent("password_code_sent", req, {
+          email,
+          status: "ok",
+          provider: mailResult.provider,
+          failover: mailResult.failover,
+        });
         return res.json({ ok: true, retryAfterSec: OTP_COOLDOWN_SEC });
       } catch (err) {
         return serverError(res, req, err);

@@ -9,6 +9,12 @@ export const otpCooldownKey = (email) => `${PREFIX}otp:cooldown:${email}`;
 export const credentialKey = (email) => `${PREFIX}cred:${createHash("sha256").update(email).digest("hex")}`;
 export const passwordOtpKey = (sid) => `${PREFIX}password:otp:${sid}`;
 export const passwordCooldownKey = (sid) => `${PREFIX}password:otp:cooldown:${sid}`;
+// Successful OTP email sends in the provider window (a resend goes through the backup SMTP).
+// Kept outside the `otp:` namespace so admin OTP scans do not count them as codes;
+// the login counter is keyed by an email hash, like credentialKey.
+export const otpMailSendsKey = (email) =>
+  `${PREFIX}mail:otp_sends:${createHash("sha256").update(email).digest("hex")}`;
+export const passwordMailSendsKey = (sid) => `${PREFIX}mail:password_sends:${sid}`;
 
 export const refEventsListKey = () => `${PREFIX}ref:events`;
 export const refEventsReferrerIndexKey = (refUuid) => `${PREFIX}ref:events:by_referrer:${refUuid}`;

@@ -26,6 +26,10 @@ docker compose up -d --build
 |---|---|
 | `REDIS_PASSWORD` / `REDIS_URL` | Redis для сессий, OTP и rate-limit |
 | `SES_SMTP_*` / `MAIL_FROM_*` | Отправка OTP через AWS SES |
+| `BACKUP_SMTP_HOST` / `BACKUP_SMTP_USER` / `BACKUP_SMTP_PASSWORD` | Опционально: резервный SMTP для повторной отправки кода (например, Unisender Go). Включается, только если заданы все три; иначе все письма идут через SES, как раньше |
+| `BACKUP_SMTP_PORT` | Порт резервного SMTP, по умолчанию `587` |
+| `BACKUP_SMTP_SECURE` | `true` — implicit TLS (обычно порт 465); по умолчанию `false`: на 587 используется обязательный STARTTLS |
+| `BACKUP_MAIL_FROM_EMAIL` / `BACKUP_MAIL_FROM_NAME` | Опционально: отправитель для резервного SMTP; по умолчанию `MAIL_FROM_EMAIL` / `MAIL_FROM_NAME` |
 | `ADMIN_REDIS_TOKEN` | Токен для `/admin/redis` |
 | `ADMIN_BASIC_USER` / `ADMIN_BASIC_PASSWORD` | Basic Auth nginx для админки |
 | `IP_HASH_SECRET` | Секретная соль для хэшей IP/UA/fingerprint в реферальной аналитике; обязательна в production |
@@ -39,6 +43,18 @@ docker compose up -d --build
 | `BILLING_SUCCESS_URL` | Опционально: явный URL успеха (https), вместе с `BILLING_CANCEL_URL` |
 | `BILLING_CANCEL_URL` | Опционально: явный URL отмены (https) |
 | `MAX_DEVICES` | Лимит устройств на пользователя (если задан) |
+
+### Резервный SMTP для кодов подтверждения
+
+Коды входа и коды подтверждения установки/смены пароля по умолчанию отправляются через AWS SES. Если резервный SMTP настроен (`BACKUP_SMTP_*`), сервер сам выбирает провайдера:
+
+- первая успешная отправка кода за 15 минут идёт через SES, каждая следующая в этом окне (кнопка «Отправить код ещё раз») — через резервный SMTP. Счётчик успешных отправок хранится в Redis: для входа — по email (ключ `v220:mail:otp_sends:<sha256>`), для смены пароля — по сессии (`v220:mail:password_sends:<sid>`), как и cooldown этих потоков;
+- если выбранный провайдер не принял письмо, один раз пробуем другой; ошибка «Не удалось отправить код» возвращается, только если не сработали оба, и такая попытка не засчитывается;
+- cooldown между отправками (60 с), формат кода, шаблоны писем и фронтенд не меняются; в логах и в событии `send_code_sent` пишется провайдер (`primary` / `backup`) и признак `failover`.
+
+Пример для Unisender Go: `BACKUP_SMTP_HOST=<SMTP-хост из кабинета Unisender Go>`, `BACKUP_SMTP_PORT=587`, `BACKUP_SMTP_USER=<SMTP-логин>`, `BACKUP_SMTP_PASSWORD=<SMTP-пароль / API-ключ>`.
+
+**Важно:** домен отправителя (`MAIL_FROM_EMAIL`, либо `BACKUP_MAIL_FROM_EMAIL`, если задан) должен быть подтверждён в Unisender — добавьте в DNS выданные им записи SPF и DKIM. Иначе Unisender отклонит письма или они попадут в спам.
 
 ---
 

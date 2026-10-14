@@ -1,4 +1,8 @@
-// AWS SES sender (SMTP transport via nodemailer).
+// OTP email sender (SMTP transports via nodemailer).
+//
+// Primary provider: AWS SES (SES_SMTP_*). Optional backup provider: any SMTP
+// relay configured via BACKUP_SMTP_* (e.g. Unisender Go on 587/STARTTLS); it is
+// used for code resends and as a one-shot failover (see sendOtpEmail).
 //
 // SES SMTP credentials are NOT the same as IAM access keys: they are generated
 // in the SES console (SMTP settings → Create SMTP credentials). The IAM user
@@ -29,23 +33,32 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
 }
 
-let cachedTransport = null;
-let cachedTransportKey = null;
+// Провайдеры отправки OTP: "primary" — AWS SES (SES_SMTP_*), "backup" —
+// опциональный второй SMTP (BACKUP_SMTP_*, например Unisender Go). Какой из них
+// использовать, решает вызывающий код (повторная отправка кода → backup), а
+// sendOtpEmail при ошибке выбранного провайдера один раз пробует другой.
+export const MAIL_PROVIDERS = Object.freeze({ PRIMARY: "primary", BACKUP: "backup" });
 
-function evictCachedTransport() {
+// Транспорты создаются лениво и кэшируются отдельно для каждого провайдера.
+const cachedTransports = new Map();
+
+function evictCachedTransport(provider) {
   // Закрываем пул нашего нодмэйлер-транспорта. Это важно делать после
   // транзиентной ошибки SMTP: иначе следующий sendMail снова возьмёт из пула
   // ту же мёртвую TCP-сессию (AWS SES / NAT закрывают коннект после простоя,
   // а пул об этом не узнаёт до первой неудачной записи).
-  if (cachedTransport) {
-    try {
-      cachedTransport.close();
-    } catch {
-      // close идемпотентен и не должен ронять отправителя
+  const providers = provider ? [provider] : [...cachedTransports.keys()];
+  for (const name of providers) {
+    const cached = cachedTransports.get(name);
+    if (cached) {
+      try {
+        cached.transport.close();
+      } catch {
+        // close идемпотентен и не должен ронять отправителя
+      }
     }
+    cachedTransports.delete(name);
   }
-  cachedTransport = null;
-  cachedTransportKey = null;
 }
 
 function isRetryableSmtpError(err) {
@@ -87,7 +100,7 @@ function isRetryableSmtpError(err) {
   return false;
 }
 
-function readSmtpConfig() {
+function readPrimarySmtpConfig() {
   const host = (process.env.SES_SMTP_HOST || "").trim();
   const portRaw = (process.env.SES_SMTP_PORT || "465").trim();
   const port = Number.parseInt(portRaw, 10);
@@ -105,17 +118,53 @@ function readSmtpConfig() {
   if (!Number.isFinite(port) || port <= 0 || port > 65535) {
     throw new Error(`SES_SMTP_PORT is invalid: ${portRaw}`);
   }
-  return { host, port, user, pass };
+  // Как и раньше: 465 — implicit TLS, любой другой порт — обязательный STARTTLS.
+  return { host, port, user, pass, secure: port === 465 };
 }
 
-function readSenderConfig() {
-  const name = (process.env.MAIL_FROM_NAME || "220v").trim();
-  const email = (process.env.MAIL_FROM_EMAIL || "").trim();
+// Резервный SMTP считается настроенным, только если заданы host, user и password.
+export function isBackupMailerConfigured() {
+  return Boolean(
+    (process.env.BACKUP_SMTP_HOST || "").trim() &&
+      (process.env.BACKUP_SMTP_USER || "").trim() &&
+      (process.env.BACKUP_SMTP_PASSWORD || "").trim(),
+  );
+}
+
+function readBackupSmtpConfig() {
+  if (!isBackupMailerConfigured()) {
+    throw new Error("Backup SMTP is not configured");
+  }
+  const host = process.env.BACKUP_SMTP_HOST.trim();
+  const portRaw = (process.env.BACKUP_SMTP_PORT || "587").trim();
+  const port = Number.parseInt(portRaw, 10);
+  const user = process.env.BACKUP_SMTP_USER.trim();
+  const pass = process.env.BACKUP_SMTP_PASSWORD.trim();
+  if (!Number.isFinite(port) || port <= 0 || port > 65535) {
+    throw new Error(`BACKUP_SMTP_PORT is invalid: ${portRaw}`);
+  }
+  // По умолчанию порт 587 со STARTTLS (requireTLS), implicit TLS — только явно.
+  const secure = (process.env.BACKUP_SMTP_SECURE || "false").trim().toLowerCase() === "true";
+  return { host, port, user, pass, secure };
+}
+
+function readSmtpConfig(provider = MAIL_PROVIDERS.PRIMARY) {
+  return provider === MAIL_PROVIDERS.BACKUP ? readBackupSmtpConfig() : readPrimarySmtpConfig();
+}
+
+function readSenderConfig(provider = MAIL_PROVIDERS.PRIMARY) {
+  // Резерв по умолчанию шлёт от того же имени и адреса, что и SES.
+  const backup = provider === MAIL_PROVIDERS.BACKUP;
+  const backupName = backup ? (process.env.BACKUP_MAIL_FROM_NAME || "").trim() : "";
+  const backupEmail = backup ? (process.env.BACKUP_MAIL_FROM_EMAIL || "").trim() : "";
+  const name = backupName || (process.env.MAIL_FROM_NAME || "220v").trim();
+  const email = backupEmail || (process.env.MAIL_FROM_EMAIL || "").trim();
+  const emailVar = backupEmail ? "BACKUP_MAIL_FROM_EMAIL" : "MAIL_FROM_EMAIL";
   if (!email) {
     throw new Error("MAIL_FROM_EMAIL is not configured");
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error("MAIL_FROM_EMAIL is not a valid email address");
+    throw new Error(`${emailVar} is not a valid email address`);
   }
   return { name, email };
 }
@@ -139,31 +188,33 @@ function formatSmtpError(err) {
   };
 }
 
-function buildTransport() {
-  const cfg = readSmtpConfig();
-  const key = `${cfg.host}|${cfg.port}|${cfg.user}`;
-  if (cachedTransport && cachedTransportKey === key) {
-    return cachedTransport;
+function buildTransport(provider = MAIL_PROVIDERS.PRIMARY) {
+  const cfg = readSmtpConfig(provider);
+  const key = `${cfg.host}|${cfg.port}|${cfg.secure}|${cfg.user}`;
+  const cached = cachedTransports.get(provider);
+  if (cached && cached.key === key) {
+    return cached.transport;
   }
+  if (cached) evictCachedTransport(provider);
   logger.info(
     {
+      provider,
       smtpHost: cfg.host,
       smtpPort: cfg.port,
       smtpUser: maskSmtpUser(cfg.user),
     },
     "mailer transport created",
   );
-  const secure = cfg.port === 465;
   // Таймауты выбраны так, чтобы две последовательные попытки sendMail
   // (см. sendOtpEmail) укладывались в proxy_read_timeout nginx для
   // /api/auth/send-code (25s). Если первая попытка наткнётся на «зомби»-
   // соединение из пула, мы хотим узнать об этом быстро и успеть переотправить
   // письмо в том же запросе — поэтому socketTimeout держим тугим.
-  cachedTransport = nodemailer.createTransport({
+  const transport = nodemailer.createTransport({
     host: cfg.host,
     port: cfg.port,
-    secure,
-    requireTLS: !secure,
+    secure: cfg.secure,
+    requireTLS: !cfg.secure,
     auth: { user: cfg.user, pass: cfg.pass },
     pool: true,
     maxConnections: 3,
@@ -173,8 +224,8 @@ function buildTransport() {
     socketTimeout: 8_000,
     tls: { minVersion: "TLSv1.2" },
   });
-  cachedTransportKey = key;
-  return cachedTransport;
+  cachedTransports.set(provider, { transport, key });
+  return transport;
 }
 
 // purpose: "login" (default) — вход по коду; "password_change" — подтверждение
@@ -311,51 +362,8 @@ export function buildOtpMessage(code, purpose = "login") {
   return { subject, text, html };
 }
 
-export async function sendOtpEmail({ email, code, purpose = "login" }) {
-  const recipientDomain =
-    typeof email === "string" && email.includes("@") ? email.slice(email.indexOf("@") + 1) : null;
-
-  if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    logger.warn({ recipientDomain }, "mailer rejected invalid recipient");
-    return { ok: false, error: "invalid_recipient" };
-  }
-  if (typeof code !== "string" || !/^\d{5}$/.test(code)) {
-    logger.warn({ emailHash: emailHash(email) }, "mailer rejected invalid otp code format");
-    return { ok: false, error: "invalid_code" };
-  }
-
-  let from;
-  let transport;
-  try {
-    from = readSenderConfig();
-    transport = buildTransport();
-  } catch (err) {
-    logger.error(
-      { err: formatSmtpError(err), emailHash: emailHash(email), maskedEmail: maskEmail(email) },
-      "mailer not configured",
-    );
-    return {
-      ok: false,
-      error: "mailer_not_configured",
-      detail: err?.message || "mailer not configured",
-    };
-  }
-
-  const { subject, text, html } = buildOtpMessage(code, purpose);
-
-  logger.info(
-    {
-      emailHash: emailHash(email),
-      maskedEmail: maskEmail(email),
-      recipientDomain,
-      fromEmail: from.email,
-      fromName: from.name,
-      purpose,
-    },
-    "mailer sending otp email",
-  );
-
-  const message = {
+function buildMessage(from, email, subject, text, html) {
+  return {
     from: { name: from.name, address: from.email },
     to: email,
     subject,
@@ -366,39 +374,58 @@ export async function sendOtpEmail({ email, code, purpose = "login" }) {
       "Auto-Submitted": "auto-generated",
     },
   };
+}
 
-  // До двух попыток: если соединение из пула «протухло» (AWS SES закрыл idle
-  // TCP, а nodemailer об этом не узнал), первая sendMail быстро упадёт с
-  // ECONNRESET / ETIMEDOUT / socket hang up. Сбрасываем пул и шлём ещё раз
-  // уже на свежем сокете. Без этого пользователь получает 502, хотя письмо
-  // на «мёртвом» сокете до закрытия может всё-таки уйти в SES (отсюда репорт
-  // «ошибка отправки, но письмо пришло»).
-  const MAX_ATTEMPTS = 2;
+// Отправка через один провайдер. maxAttempts > 1 включает повтор на свежем
+// сокете после транзиентной ошибки (протухший пул SES).
+async function sendViaProvider({ provider, email, recipientDomain, content, maxAttempts }) {
+  let from;
+  let transport;
+  try {
+    from = readSenderConfig(provider);
+    transport = buildTransport(provider);
+  } catch (err) {
+    logger.error(
+      { provider, err: formatSmtpError(err), emailHash: emailHash(email), maskedEmail: maskEmail(email) },
+      "mailer not configured",
+    );
+    return {
+      ok: false,
+      error: "mailer_not_configured",
+      detail: err?.message || "mailer not configured",
+    };
+  }
+
+  logger.info(
+    {
+      provider,
+      emailHash: emailHash(email),
+      maskedEmail: maskEmail(email),
+      recipientDomain,
+      fromEmail: from.email,
+      fromName: from.name,
+      purpose: content.purpose,
+    },
+    "mailer sending otp email",
+  );
+
+  const message = buildMessage(from, email, content.subject, content.text, content.html);
   let lastError = null;
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const startedAtMs = Date.now();
     try {
       const info = await transport.sendMail(message);
-      const elapsedMs = Date.now() - startedAtMs;
-      logger.info(
-        {
-          emailHash: emailHash(email),
-          messageId: info?.messageId || null,
-          elapsedMs,
-          attempt,
-        },
-        "mailer otp email sent",
-      );
-      return { ok: true, messageId: info?.messageId || null };
+      return { ok: true, messageId: info?.messageId || null, elapsedMs: Date.now() - startedAtMs, attempt };
     } catch (err) {
       lastError = err;
       const elapsedMs = Date.now() - startedAtMs;
       const smtpErr = formatSmtpError(err);
-      const retryable = attempt < MAX_ATTEMPTS && isRetryableSmtpError(err);
+      const retryable = attempt < maxAttempts && isRetryableSmtpError(err);
 
       logger.warn(
         {
+          provider,
           emailHash: emailHash(email),
           maskedEmail: maskEmail(email),
           recipientDomain,
@@ -411,14 +438,16 @@ export async function sendOtpEmail({ email, code, purpose = "login" }) {
         "mailer smtp send attempt failed",
       );
 
+      // Пул после ошибки сбрасываем всегда: следующая отправка (повтор, другой
+      // запрос) должна идти на свежем сокете.
+      evictCachedTransport(provider);
       if (!retryable) break;
 
-      evictCachedTransport();
       try {
-        transport = buildTransport();
+        transport = buildTransport(provider);
       } catch (rebuildErr) {
         logger.error(
-          { err: formatSmtpError(rebuildErr), emailHash: emailHash(email) },
+          { provider, err: formatSmtpError(rebuildErr), emailHash: emailHash(email) },
           "mailer transport rebuild failed during retry",
         );
         lastError = rebuildErr;
@@ -430,6 +459,7 @@ export async function sendOtpEmail({ email, code, purpose = "login" }) {
   const smtpErr = formatSmtpError(lastError);
   logger.error(
     {
+      provider,
       emailHash: emailHash(email),
       maskedEmail: maskEmail(email),
       recipientDomain,
@@ -446,24 +476,107 @@ export async function sendOtpEmail({ email, code, purpose = "login" }) {
   };
 }
 
+/**
+ * provider: "primary" (SES, по умолчанию) или "backup" (BACKUP_SMTP_*). Если
+ * резервный SMTP не настроен, всегда используется primary — как раньше.
+ * При ошибке выбранного провайдера один раз пробуем другой.
+ *
+ * @returns {Promise<{ ok: true, messageId: string | null, provider: string, failover: boolean } | { ok: false, error: string, detail?: string, provider?: string, failover?: boolean }>}
+ */
+export async function sendOtpEmail({ email, code, purpose = "login", provider = MAIL_PROVIDERS.PRIMARY }) {
+  const recipientDomain =
+    typeof email === "string" && email.includes("@") ? email.slice(email.indexOf("@") + 1) : null;
+
+  if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    logger.warn({ recipientDomain }, "mailer rejected invalid recipient");
+    return { ok: false, error: "invalid_recipient" };
+  }
+  if (typeof code !== "string" || !/^\d{5}$/.test(code)) {
+    logger.warn({ emailHash: emailHash(email) }, "mailer rejected invalid otp code format");
+    return { ok: false, error: "invalid_code" };
+  }
+
+  const backupConfigured = isBackupMailerConfigured();
+  const requested = provider === MAIL_PROVIDERS.BACKUP ? MAIL_PROVIDERS.BACKUP : MAIL_PROVIDERS.PRIMARY;
+  const chosen = backupConfigured ? requested : MAIL_PROVIDERS.PRIMARY;
+  const order = backupConfigured
+    ? [chosen, chosen === MAIL_PROVIDERS.BACKUP ? MAIL_PROVIDERS.PRIMARY : MAIL_PROVIDERS.BACKUP]
+    : [MAIL_PROVIDERS.PRIMARY];
+
+  const { subject, text, html } = buildOtpMessage(code, purpose);
+  const content = { subject, text, html, purpose };
+
+  // Без резерва — до двух попыток через SES: если соединение из пула
+  // «протухло» (AWS SES закрыл idle TCP, а nodemailer об этом не узнал), первая
+  // sendMail быстро упадёт с ECONNRESET / ETIMEDOUT / socket hang up, и мы
+  // повторим на свежем сокете. С резервом роль повтора играет второй
+  // провайдер: по одной попытке на каждого, чтобы суммарно уложиться в те же
+  // две попытки и в таймаут nginx.
+  const maxAttempts = order.length > 1 ? 1 : 2;
+  let result = null;
+
+  for (let i = 0; i < order.length; i++) {
+    const current = order[i];
+    result = await sendViaProvider({ provider: current, email, recipientDomain, content, maxAttempts });
+    if (result.ok) {
+      const failover = current !== chosen;
+      logger.info(
+        {
+          emailHash: emailHash(email),
+          provider: current,
+          requestedProvider: chosen,
+          failover,
+          messageId: result.messageId,
+          elapsedMs: result.elapsedMs,
+          attempt: result.attempt,
+        },
+        "mailer otp email sent",
+      );
+      return { ok: true, messageId: result.messageId, provider: current, failover };
+    }
+    if (i + 1 < order.length) {
+      logger.warn(
+        { emailHash: emailHash(email), failedProvider: current, nextProvider: order[i + 1] },
+        "mailer failing over to another smtp provider",
+      );
+    }
+  }
+
+  return { ...result, provider: chosen, failover: order.length > 1 };
+}
+
+function summarizeProvider(provider) {
+  const smtp = readSmtpConfig(provider);
+  const from = readSenderConfig(provider);
+  return {
+    smtpHost: smtp.host,
+    smtpPort: smtp.port,
+    smtpUser: maskSmtpUser(smtp.user),
+    fromEmail: from.email,
+    fromName: from.name,
+  };
+}
+
 export function getMailerConfigSummary() {
+  let summary;
   try {
-    const smtp = readSmtpConfig();
-    const from = readSenderConfig();
-    return {
-      ok: true,
-      smtpHost: smtp.host,
-      smtpPort: smtp.port,
-      smtpUser: maskSmtpUser(smtp.user),
-      fromEmail: from.email,
-      fromName: from.name,
-    };
+    summary = { ok: true, ...summarizeProvider(MAIL_PROVIDERS.PRIMARY) };
   } catch (err) {
     return {
       ok: false,
       error: err?.message || "mailer not configured",
     };
   }
+  if (!isBackupMailerConfigured()) {
+    summary.backup = { configured: false };
+    return summary;
+  }
+  try {
+    summary.backup = { configured: true, ...summarizeProvider(MAIL_PROVIDERS.BACKUP) };
+  } catch (err) {
+    summary.backup = { configured: true, error: err?.message || "backup mailer misconfigured" };
+  }
+  return summary;
 }
 
 export async function verifyMailerConfig() {
@@ -471,8 +584,21 @@ export async function verifyMailerConfig() {
   if (!summary.ok) {
     throw new Error(summary.error);
   }
-  const transport = buildTransport();
+  const transport = buildTransport(MAIL_PROVIDERS.PRIMARY);
   await transport.verify();
+  // Резервный SMTP проверяем мягко: его недоступность не должна выглядеть
+  // как поломка основного отправителя.
+  if (summary.backup?.configured) {
+    try {
+      await buildTransport(MAIL_PROVIDERS.BACKUP).verify();
+      logger.info({ provider: MAIL_PROVIDERS.BACKUP }, "mailer backup smtp connection verified");
+    } catch (err) {
+      logger.warn(
+        { provider: MAIL_PROVIDERS.BACKUP, err: formatSmtpError(err) },
+        "mailer backup smtp verify failed at startup",
+      );
+    }
+  }
   return summary;
 }
 

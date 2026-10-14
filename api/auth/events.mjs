@@ -78,6 +78,9 @@ export async function recordAuthEvent(type, req, fields = {}) {
           : undefined,
       status: typeof fields.status === "string" ? fields.status : undefined,
       detail: typeof fields.detail === "string" ? fields.detail : undefined,
+      // OTP mail sends: which SMTP provider delivered the code (absent on other events).
+      provider: typeof fields.provider === "string" ? fields.provider : undefined,
+      failover: typeof fields.failover === "boolean" ? fields.failover : undefined,
     };
 
     await redis
