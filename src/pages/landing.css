@@ -1763,29 +1763,38 @@ body.landing-no-scroll { overflow: hidden; }
 .landing-root .support-meta--in-chat {
   margin-top: 16px;
 }
-.landing-root .support-meta__item--primary {
-  border-color: rgba(198, 255, 61, 0.45);
+.landing-root .support-email-preferred {
+  margin-top: 16px;
+  padding: 20px 22px;
+  border: 2px solid rgba(198, 255, 61, 0.85);
+  border-radius: var(--radius-md);
   background:
-    radial-gradient(320px 200px at 0% 0%, rgba(198, 255, 61, 0.12), transparent 70%),
-    rgba(198, 255, 61, 0.06);
+    radial-gradient(420px 220px at 0% 0%, rgba(198, 255, 61, 0.16), transparent 70%),
+    rgba(198, 255, 61, 0.07);
+  box-shadow: 0 0 0 4px rgba(198, 255, 61, 0.08);
 }
-.landing-root .support-meta__item--primary .support-meta__value {
+.landing-root .support-email-preferred__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.landing-root .support-email-preferred__email {
   display: inline-block;
-  font-size: 24px;
+  margin-top: 8px;
+  color: rgb(198, 255, 61);
+  font-size: 28px;
   font-weight: 800;
+  line-height: 1.2;
+  text-decoration: underline;
+  text-underline-offset: 4px;
   overflow-wrap: anywhere;
 }
-.landing-root .support-email-highlight {
-  margin-top: 16px;
-}
-.landing-root .support-email-highlight .support-email-highlight__note {
-  margin: 0 0 6px;
-}
-.landing-root .support-meta__note {
-  margin: 8px 0 0;
+.landing-root .support-email-preferred__text {
+  margin: 10px 0 0;
   color: var(--muted-2);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.55;
 }
 .landing-root .support-announcement .support-card__title {
   margin-bottom: 6px;

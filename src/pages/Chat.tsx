@@ -784,14 +784,15 @@ const Chat = () => {
 
             <div className="app-page__eyebrow">Поддержка 220v</div>
             <h1 className="app-page__title">Чат с поддержкой</h1>
-            <div className="support-meta__item support-meta__item--primary support-email-highlight">
-              <p className="support-meta__note support-email-highlight__note">
-                Пока онлайн-чат работает с перебоями — пишите на почту:
-              </p>
-              <a href="mailto:support@220v.shop" className="support-meta__value support-meta__link">
+            <section className="support-email-preferred" aria-label="Предпочтительный способ связи — почта">
+              <h2 className="support-email-preferred__title">Предпочтительный способ связи — почта</h2>
+              <a href="mailto:support@220v.shop" className="support-email-preferred__email">
                 support@220v.shop
               </a>
-            </div>
+              <p className="support-email-preferred__text">
+                Онлайн-чат сейчас работает с перебоями, и сообщения в нём могут не дойти. Пожалуйста, пишите на почту — так мы точно получим ваше обращение и ответим. В письме укажите email, на который оформлена подписка.
+              </p>
+            </section>
 
             <div className="support-layout support2-layout">
               <section className="support-card support2-chat">
