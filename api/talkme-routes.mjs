@@ -1,4 +1,9 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, extname, resolve } from "node:path";
+import express from "express";
+import multer from "multer";
 import { clientError } from "./http/errors.mjs";
 import { fetchWithTimeout } from "./http/fetchWithTimeout.mjs";
 import { formatTimeoutMessage, isTimeoutError, publicMessageFromErr } from "./http/userMessages.mjs";
@@ -9,16 +14,105 @@ import {
 } from "./http/rateLimit.mjs";
 import { requireSession } from "./auth/session.mjs";
 import { isProd } from "./config.mjs";
-import {
-  isAllowedAttachmentUrl,
-  registerSupportChatAttachmentRoutes,
-} from "./support-chat-uploads.mjs";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const SUPPORT_CHAT_UPLOADS_DIR = resolve(
+  process.env.SUPPORT_CHAT_UPLOADS_DIR?.trim() || resolve(__dirname, "uploads", "support-chat"),
+);
+const SUPPORT_CHAT_MAX_FILE_SIZE_MB = Number(process.env.SUPPORT_CHAT_MAX_FILE_SIZE_MB || "50");
+const SUPPORT_CHAT_MAX_FILE_SIZE =
+  Number.isFinite(SUPPORT_CHAT_MAX_FILE_SIZE_MB) && SUPPORT_CHAT_MAX_FILE_SIZE_MB > 0
+    ? SUPPORT_CHAT_MAX_FILE_SIZE_MB * 1024 * 1024
+    : 50 * 1024 * 1024;
+const CHAT_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"]);
+const CHAT_VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv"]);
+const CHAT_ZIP_EXTENSIONS = new Set([".zip"]);
+const CHAT_ALLOWED_EXTENSIONS = new Set([
+  ...CHAT_IMAGE_EXTENSIONS,
+  ...CHAT_VIDEO_EXTENSIONS,
+  ...CHAT_ZIP_EXTENSIONS,
+]);
+const CHAT_ALLOWED_MIME_PREFIXES = ["image/", "video/"];
+const CHAT_ALLOWED_MIME_TYPES = new Set([
+  "application/zip",
+  "application/x-zip-compressed",
+  "multipart/x-zip",
+  "application/octet-stream",
+]);
+mkdirSync(SUPPORT_CHAT_UPLOADS_DIR, { recursive: true });
+
+function getChatFileExtension(file) {
+  return extname(file?.originalname || "").toLowerCase();
+}
+
+function sanitizeChatFileBaseName(name) {
+  return (name || "file")
+    .normalize("NFKD")
+    .replace(/[^\w.-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80) || "file";
+}
+
+function getChatAttachmentKind({ ext, mimeType }) {
+  if (CHAT_IMAGE_EXTENSIONS.has(ext) || mimeType.startsWith("image/")) return "image";
+  if (CHAT_VIDEO_EXTENSIONS.has(ext) || mimeType.startsWith("video/")) return "video";
+  return "zip";
+}
+
+function isAllowedChatFile(file) {
+  const ext = getChatFileExtension(file);
+  if (ext === ".svg") return false;
+  if (!CHAT_ALLOWED_EXTENSIONS.has(ext)) return false;
+  const mimeType = String(file?.mimetype || "").toLowerCase();
+  if (mimeType === "image/svg+xml") return false;
+  if (!mimeType) return true;
+  if (CHAT_ALLOWED_MIME_PREFIXES.some((prefix) => mimeType.startsWith(prefix))) return true;
+  if (CHAT_ZIP_EXTENSIONS.has(ext) && CHAT_ALLOWED_MIME_TYPES.has(mimeType)) return true;
+  return false;
+}
+
+function buildPublicUrl(req, path) {
+  const protoHeader = String(req.headers["x-forwarded-proto"] || req.protocol || "http");
+  const proto = protoHeader.split(",")[0].trim() || "http";
+  const host = String(req.headers["x-forwarded-host"] || req.get("host") || "").trim();
+  if (!host) return path;
+  return `${proto}://${host}${path}`;
+}
+
+const supportChatUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, SUPPORT_CHAT_UPLOADS_DIR),
+    filename: (_req, file, cb) => {
+      const ext = getChatFileExtension(file);
+      const base = sanitizeChatFileBaseName(file.originalname.replace(/\.[^.]+$/, ""));
+      cb(null, `${Date.now()}-${randomUUID()}-${base}${ext}`);
+    },
+  }),
+  limits: { fileSize: SUPPORT_CHAT_MAX_FILE_SIZE, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (!isAllowedChatFile(file)) {
+      cb(new Error("Поддерживаются только изображения, видео и ZIP-файлы."));
+      return;
+    }
+    cb(null, true);
+  },
+});
 
 export function registerTalkMeRoutes(app) {
+  app.use(
+    "/api/support/chat-attachment",
+    (_req, res, next) => {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Content-Security-Policy", "default-src 'none'");
+      next();
+    },
+    express.static(SUPPORT_CHAT_UPLOADS_DIR),
+  );
+
   const talkmeProtected = [talkmeIpLimiter, talkmeSessionLimiter, ...requireSession];
   const uploadProtected = [chatUploadLimiter, talkmeIpLimiter, ...requireSession];
-
-  registerSupportChatAttachmentRoutes(app, uploadProtected);
 
 // ── Talk-Me REST API proxy (for /chat) ──
 
@@ -206,6 +300,20 @@ function assertSessionClientId(req, res, clientId) {
     return null;
   }
   return trimmed;
+}
+
+function isAllowedAttachmentUrl(url, req) {
+  try {
+    const parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) return false;
+    if (!parsed.pathname.includes("/support/chat-attachment/")) return false;
+    const host = String(req.headers["x-forwarded-host"] || req.get("host") || "")
+      .split(",")[0]
+      .trim();
+    return !host || parsed.host === host;
+  } catch {
+    return false;
+  }
 }
 
 function talkmeToken() {
@@ -408,7 +516,7 @@ function countOnlineOperatorsFromGetListResult(result) {
 
   app.post("/api/talkme/client-id", ...talkmeProtected, (req, res) => {
   const { clientId } = getTalkMeIdentity(req);
-  return res.json({ clientId, provider: "talkme" });
+  return res.json({ clientId });
 });
 
   app.post("/api/talkme/messages", ...talkmeProtected, async (req, res) => {
@@ -454,6 +562,42 @@ function countOnlineOperatorsFromGetListResult(result) {
     const { message, status } = talkmeRouteError(err);
     return res.status(status).json({ error: message });
   }
+});
+
+  app.post("/api/support/chat-attachment", ...uploadProtected, (req, res) => {
+  supportChatUpload.single("file")(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({
+          error: `Размер файла превышает ${Math.floor(SUPPORT_CHAT_MAX_FILE_SIZE / (1024 * 1024))} МБ`,
+        });
+      }
+      return res.status(400).json({ error: err.message || "Не удалось загрузить файл" });
+    }
+    if (err) {
+      return res.status(400).json({ error: err.message || "Не удалось загрузить файл" });
+    }
+
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ error: "Файл обязателен" });
+    }
+
+    const ext = getChatFileExtension(file);
+    const mimeType = String(file.mimetype || "").toLowerCase();
+    const kind = getChatAttachmentKind({ ext, mimeType });
+    const path = `/api/support/chat-attachment/${encodeURIComponent(file.filename)}`;
+    const url = buildPublicUrl(req, path);
+
+    return res.json({
+      url,
+      path,
+      fileName: file.originalname,
+      mimeType,
+      size: file.size,
+      kind,
+    });
+  });
 });
 
 /**

@@ -39,59 +39,8 @@ docker compose up -d --build
 | `BILLING_SUCCESS_URL` | Опционально: явный URL успеха (https), вместе с `BILLING_CANCEL_URL` |
 | `BILLING_CANCEL_URL` | Опционально: явный URL отмены (https) |
 | `MAX_DEVICES` | Лимит устройств на пользователя (если задан) |
-| `TALKME_API_TOKEN` | Токен Talk-Me REST API (провайдер чата по умолчанию) |
-| `CHATWOOT_BASE_URL` | Опционально: адрес self-hosted Chatwoot, например `https://chat.example.com`. Вместе с `CHATWOOT_INBOX_IDENTIFIER` переключает чат на Chatwoot |
-| `CHATWOOT_INBOX_IDENTIFIER` | Идентификатор API-инбокса Chatwoot (Settings → Inboxes → инбокс → Configuration) |
-| `CHATWOOT_HMAC_TOKEN` | HMAC-токен того же инбокса для identity validation (`identifier_hash`); без него контакты создаются без проверки личности |
-
----
-
-## Чат поддержки: Talk-Me или Chatwoot
-
-Страница `/chat` — собственный UI; браузер ходит только в наш API (`/api/talkme/*`,
-`/api/support/chat-attachment`), а сервер проксирует запросы провайдеру.
-
-- **Talk-Me** (по умолчанию) — `api/talkme-routes.mjs`, нужен `TALKME_API_TOKEN`.
-- **Chatwoot** (self-hosted, open-source) — `api/chatwoot-routes.mjs`, Client API инбокса типа «API».
-  Включается, когда заданы **оба** `CHATWOOT_BASE_URL` и `CHATWOOT_INBOX_IDENTIFIER`;
-  тогда маршруты Talk-Me не регистрируются и виджет Talk-Me на фронте не подключается.
-  Без этих переменных всё работает как раньше через Talk-Me.
-
-Текущий провайдер: `GET /api/chat/provider` → `{ "provider": "talkme" | "chatwoot" }`
-(то же поле `provider` приходит в ответе `POST /api/talkme/client-id`).
-
-### Что настроить в Chatwoot
-
-1. Settings → Inboxes → Add Inbox → **API**. Название, например «220v». Webhook URL можно
-   оставить пустым: Client API он не нужен (опционально — если позже понадобятся события
-   в реальном времени на сервере).
-2. Добавить агентов в инбокс.
-3. В настройках инбокса (Configuration) включить **Enforce User Identity Validation**
-   и скопировать:
-   - **Inbox Identifier** → `CHATWOOT_INBOX_IDENTIFIER`;
-   - **HMAC Token** → `CHATWOOT_HMAC_TOKEN`.
-4. `CHATWOOT_BASE_URL` — адрес вашего Chatwoot без завершающего `/`.
-
-Контакт создаётся при первом сообщении пользователя: `identifier` = UUID пользователя,
-`identifier_hash` = HMAC-SHA256(UUID, `CHATWOOT_HMAC_TOKEN`), `email`, а в
-`custom_attributes` — `tariff`, `devices`, `traffic`, `expire_at`, `site: "220v"`.
-`source_id` контакта и текущий диалог хранятся в Redis (`v220:chatwoot:contact:{uuid}`),
-поэтому с любого устройства пользователь попадает в тот же диалог. Открытый диалог
-переиспользуется; если последний закрыт (resolved) — следующее сообщение открывает новый.
-Вложения проходят прежнюю проверку (типы и `SUPPORT_CHAT_MAX_FILE_SIZE_MB`) и
-пересылаются в Chatwoot multipart-ом (`attachments[]`).
-
-Отличия от Talk-Me: у Client API нет числа операторов онлайн (бейдж скрывается) и
-статуса «оператор печатает» без вебсокета (UI работает поллингом, индикатор не
-показывается). История на экране — последний диалог.
-
-### CSP
-
-Запросы к Chatwoot API идут только с сервера, поэтому в `connect-src`/`script-src`
-ничего добавлять не нужно. Браузер напрямую загружает только **вложения операторов**
-(`data_url` из Chatwoot): добавьте хост Chatwoot (и S3/CDN, если Chatwoot хранит файлы
-там) в `img-src` и `media-src` в `nginx.conf`. Домены Talk-Me можно убрать из CSP после
-полного отказа от Talk-Me.
+| `VITE_CHATWOOT_BASE_URL` / `VITE_CHATWOOT_WEBSITE_TOKEN` | Онлайн-чат Chatwoot (build-time, см. [Онлайн-чат](#онлайн-чат-chatwoot--talk-me)) |
+| `CHATWOOT_HMAC_TOKEN` | HMAC-токен Website-инбокса Chatwoot для проверки личности (только API, в клиент не попадает) |
 
 ---
 
@@ -194,6 +143,47 @@ BFF проверяет подпись токена через `EMAIL_UNSUBSCRIBE
 ### Telegram-бот
 
 Ранее бот мог вызывать `POST /api/platega-bot-payment` — этот маршрут удалён. Для оплаты из бота вызывайте **RMW** `POST /v1/billing/checkout` с телом в формате RMW (`user_ref`, `tariff_key`, `payment_method` int, `return_url`, `failed_url`) и `X-Api-Key`, либо отдельный BFF-роут.
+
+---
+
+## Онлайн-чат (Chatwoot / Talk-Me)
+
+Чат поддержки переключается фасадом `src/lib/supportChat.ts` (`openSupportChat`, `prepareSupportChat`, `resetSupportChat`).
+
+- **Chatwoot** (self-hosted, Website-виджет) включается, если при сборке заданы **обе** переменные `VITE_CHATWOOT_BASE_URL` и `VITE_CHATWOOT_WEBSITE_TOKEN`. Тогда на `/chat` (и `/support`, который туда редиректит) вместо собственного Talk-Me чата показывается карточка с кнопкой «Открыть чат»: роуты `/api/talkme/*` не вызываются, скрипт Talk-Me не загружается.
+- **Fallback:** если хотя бы одна из них пустая, всё работает как раньше через Talk-Me.
+
+| Переменная | Где | Описание |
+|---|---|---|
+| `VITE_CHATWOOT_BASE_URL` | build arg веб-образа | URL инсталляции Chatwoot без `/` в конце, например `https://chat.example.com`. SDK грузится с `${VITE_CHATWOOT_BASE_URL}/packs/js/sdk.js` |
+| `VITE_CHATWOOT_WEBSITE_TOKEN` | build arg веб-образа | Website token инбокса «220v» |
+| `CHATWOOT_HMAC_TOKEN` | `.env` API | HMAC-токен инбокса (Settings → Inboxes → «220v» → Configuration → Identity validation). Только на сервере |
+
+`VITE_*` вшиваются в сборку: задайте их в `.env` (compose передаёт их как build args) и пересоберите `web` (`docker compose up -d --build web`).
+
+Что создать в Chatwoot:
+
+1. **Website**-инбокс «220v» (домен `220v.shop`, приветствие на русском). Его website token → `VITE_CHATWOOT_WEBSITE_TOKEN`.
+2. В настройках инбокса включить **Enforce user identity validation** и скопировать HMAC-токен → `CHATWOOT_HMAC_TOKEN`.
+3. (Желательно) завести Contact custom attributes `tariff`, `devices`, `traffic`, `expire_at`, `site` (тип text).
+
+Как это работает:
+
+- Виджет открывается только кнопкой «Открыть чат» (`hideMessageBubble: true`, `locale: "ru"`); автоматически чат не открывается, чтобы не перекрывать блок про почту.
+- Для залогиненного пользователя клиент запрашивает `GET /api/chat/identity` (session, rate limit) → `{ identifier, identifier_hash, email, name }`, где `identifier` — UUID пользователя, а `identifier_hash` = HMAC-SHA256 (hex) от него с `CHATWOOT_HMAC_TOKEN`. Без токена `identifier_hash: null`, и `setUser` вызывается без него (при включённой проверке личности Chatwoot такой контакт не примет — включайте обе настройки вместе).
+- Затем `setCustomAttributes`: `tariff`, `devices` (`cur/max`), `traffic` (`usedGb/limitGb`), `expire_at`, `site: "220v"`.
+- При выходе вызывается `$chatwoot.reset()` и удаляются cookies `cw_*`, чтобы следующий пользователь браузера не увидел чужую переписку.
+
+### CSP
+
+CSP в `nginx.conf` статический и в режиме report-only. Когда домен Chatwoot известен, добавьте его (например, `chat.example.com`) в:
+
+- `script-src` — `https://chat.example.com`;
+- `connect-src` — `https://chat.example.com` и `wss://chat.example.com`;
+- `frame-src` — `https://chat.example.com` (виджет работает в iframe; директивы сейчас нет, без неё действует `default-src 'self'`);
+- `img-src` — `https://chat.example.com` (аватары, вложения).
+
+Домены Talk-Me можно убрать после полного перехода.
 
 ---
 

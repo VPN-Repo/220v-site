@@ -9,8 +9,6 @@ export const otpCooldownKey = (email) => `${PREFIX}otp:cooldown:${email}`;
 export const credentialKey = (email) => `${PREFIX}cred:${createHash("sha256").update(email).digest("hex")}`;
 export const passwordOtpKey = (sid) => `${PREFIX}password:otp:${sid}`;
 export const passwordCooldownKey = (sid) => `${PREFIX}password:otp:cooldown:${sid}`;
-// Chatwoot: source_id контакта и текущий диалог пользователя (по UUID, без email в ключе).
-export const chatwootContactKey = (userUuid) => `${PREFIX}chatwoot:contact:${userUuid}`;
 
 export const refEventsListKey = () => `${PREFIX}ref:events`;
 export const refEventsReferrerIndexKey = (refUuid) => `${PREFIX}ref:events:by_referrer:${refUuid}`;

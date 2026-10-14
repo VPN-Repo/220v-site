@@ -48,7 +48,6 @@
 - SVG files are rejected at upload. Uploaded files are served with `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'`.
 - `attachmentUrl` in `/api/talkme/send` must point to a file uploaded via `/api/support/chat-attachment` on the same host.
 - Server-side Talk-Me token: set `TALKME_API_TOKEN` only (do not expose via `VITE_*` build args).
-- Chatwoot provider (when `CHATWOOT_BASE_URL` + `CHATWOOT_INBOX_IDENTIFIER` are set): same `/api/talkme/*` routes, limiters and `requireSession`; the contact is keyed by the session user UUID with `identifier_hash` (HMAC-SHA256 with `CHATWOOT_HMAC_TOKEN`); the Chatwoot `source_id` stays server-side in Redis; upstream 401/404 are returned as 502 so they never look like an expired site session.
 
 ## Email (AWS SES)
 

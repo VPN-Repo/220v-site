@@ -1706,6 +1706,18 @@ body.landing-no-scroll { overflow: hidden; }
   font-size: 15px;
   line-height: 1.65;
 }
+.landing-root .support-chatwoot__actions {
+  position: relative;
+  z-index: 1;
+  margin-top: 20px;
+}
+.landing-root .support-chatwoot__error {
+  position: relative;
+  z-index: 1;
+  margin-top: 14px;
+  color: var(--muted-2);
+  font-size: 14px;
+}
 .landing-root .support-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

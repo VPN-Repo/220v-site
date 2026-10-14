@@ -61,6 +61,8 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_URL: /api
+        VITE_CHATWOOT_BASE_URL: ${VITE_CHATWOOT_BASE_URL:-}
+        VITE_CHATWOOT_WEBSITE_TOKEN: ${VITE_CHATWOOT_WEBSITE_TOKEN:-}
     env_file:
       - .env
     ports:
