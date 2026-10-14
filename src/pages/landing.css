@@ -1706,18 +1706,6 @@ body.landing-no-scroll { overflow: hidden; }
   font-size: 15px;
   line-height: 1.65;
 }
-.landing-root .support-chatwoot__actions {
-  position: relative;
-  z-index: 1;
-  margin-top: 20px;
-}
-.landing-root .support-chatwoot__error {
-  position: relative;
-  z-index: 1;
-  margin-top: 14px;
-  color: var(--muted-2);
-  font-size: 14px;
-}
 .landing-root .support-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1774,39 +1762,6 @@ body.landing-no-scroll { overflow: hidden; }
 }
 .landing-root .support-meta--in-chat {
   margin-top: 16px;
-}
-.landing-root .support-email-preferred {
-  margin-top: 16px;
-  padding: 20px 22px;
-  border: 2px solid rgba(198, 255, 61, 0.85);
-  border-radius: var(--radius-md);
-  background:
-    radial-gradient(420px 220px at 0% 0%, rgba(198, 255, 61, 0.16), transparent 70%),
-    rgba(198, 255, 61, 0.07);
-  box-shadow: 0 0 0 4px rgba(198, 255, 61, 0.08);
-}
-.landing-root .support-email-preferred__title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.35;
-}
-.landing-root .support-email-preferred__email {
-  display: inline-block;
-  margin-top: 8px;
-  color: rgb(198, 255, 61);
-  font-size: 28px;
-  font-weight: 800;
-  line-height: 1.2;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  overflow-wrap: anywhere;
-}
-.landing-root .support-email-preferred__text {
-  margin: 10px 0 0;
-  color: var(--muted-2);
-  font-size: 15px;
-  line-height: 1.55;
 }
 .landing-root .support-announcement .support-card__title {
   margin-bottom: 6px;

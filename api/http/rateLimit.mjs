@@ -148,11 +148,3 @@ export const refClickIpLimiter = makeRateLimit({
   prefix: "v220:rl:refclick:ip:",
   message: { error: "Слишком много переходов по ссылке. Попробуйте позже." },
 });
-
-export const chatIdentityLimiter = makeRateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
-  prefix: "v220:rl:chat:identity:sid:",
-  keyGenerator: (req) => req.cookies?.[SESSION_COOKIE] || req.ip,
-  message: { error: "Слишком много запросов. Попробуйте позже." },
-});

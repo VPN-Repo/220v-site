@@ -17,7 +17,6 @@ import {
   clearChatCompatCache,
   getVpnTalkmeProfileRaw,
 } from "@/lib/vpnStorage";
-import { resetSupportChat } from "@/lib/supportChat";
 import { resolveIsPremium } from "@/lib/tariff";
 import { useTrafficPurchaseRestriction } from "@/hooks/useTrafficPurchaseRestriction";
 import type { DashboardSidebarItem } from "@/components/DashboardSidebar";
@@ -104,7 +103,6 @@ export function useDashboardSidebarItems(): DashboardSidebarData {
   const handleLogout = async () => {
     await apiPost("/auth/logout");
     clearChatCompatCache();
-    resetSupportChat();
     await refreshSession();
     navigate("/");
   };

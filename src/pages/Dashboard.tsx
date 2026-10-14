@@ -26,7 +26,6 @@ import {
   KeyRound,
 } from "lucide-react";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
-import { resetSupportChat } from "@/lib/supportChat";
 import { useSession } from "@/hooks/useSession";
 import { trafficPurchaseRestriction, useTrafficPurchaseRestriction } from "@/hooks/useTrafficPurchaseRestriction";
 import {
@@ -621,7 +620,6 @@ const Dashboard = () => {
   const handleLogout = async () => {
     await apiPost("/auth/logout");
     clearChatCompatCache();
-    resetSupportChat();
     navigate("/");
   };
 

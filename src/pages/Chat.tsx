@@ -2,7 +2,6 @@ import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from
 import { Loader2, Paperclip, Send, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import ChatwootSupportCard from "@/components/ChatwootSupportCard";
 import DashboardSidebar from "@/components/DashboardSidebar";
 import { useDashboardSidebarItems } from "@/hooks/useDashboardSidebarItems";
 import { apiBase, apiPost, apiUploadForm } from "@/lib/api";
@@ -12,7 +11,6 @@ import {
   ensureTalkMeScript,
   setTalkMeClientInfo,
 } from "@/lib/talkme";
-import { getSupportChatProvider } from "@/lib/supportChat";
 import { getVpnTalkmeProfileRaw } from "@/lib/vpnStorage";
 import LandingFooter from "@/pages/landing/LandingFooter";
 import LandingShell from "@/pages/landing/LandingShell";
@@ -350,91 +348,10 @@ function readTalkMeCustomFields(): ReturnType<typeof buildTalkMeCustomFields> | 
   }
 }
 
-/** Shared top of the support page: announcement, heading and the preferred email contact. */
-function SupportPageIntro({ announcement }: { announcement: string | null }) {
-  return (
-    <>
-      {announcement ? (
-        <section
-          className="support-card support-announcement support-announcement--page-start"
-          role="status"
-          aria-label="Важное объявление"
-        >
-          <h2 className="support-card__title">Важное объявление</h2>
-          <p className="support-card__subtitle whitespace-pre-wrap">{announcement}</p>
-        </section>
-      ) : null}
-
-      <div className="app-page__eyebrow">Поддержка 220v</div>
-      <h1 className="app-page__title">Чат с поддержкой</h1>
-      <section className="support-email-preferred" aria-label="Предпочтительный способ связи — почта">
-        <h2 className="support-email-preferred__title">Предпочтительный способ связи — почта</h2>
-        <a href="mailto:support@220v.shop" className="support-email-preferred__email">
-          support@220v.shop
-        </a>
-        <p className="support-email-preferred__text">
-          Онлайн-чат сейчас работает с перебоями, и сообщения в нём могут не дойти. Пожалуйста, пишите на почту — так мы точно получим ваше обращение и ответим. В письме укажите email, на который оформлена подписка.
-        </p>
-      </section>
-    </>
-  );
-}
-
-/** Loads the RMW/NOTICE announcement for logged-in users. */
-function useAnnouncement(email: string | null): string | null {
-  const [announcement, setAnnouncement] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!email) return;
-
-    let cancelled = false;
-    fetch(`${apiBase}/announcement`)
-      .then((r) => r.json() as Promise<{ text?: unknown }>)
-      .then((data) => {
-        if (cancelled) return;
-        if (typeof data?.text === "string" && data.text.trim()) {
-          setAnnouncement(data.text.trim());
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [email]);
-
-  return announcement;
-}
-
-/** Chatwoot mode: same page layout, but the website widget replaces the custom Talk-Me chat. */
-function ChatwootChat() {
-  const { email, items, handleLogout } = useDashboardSidebarItems();
-  const announcement = useAnnouncement(email);
-
-  return (
-    <LandingShell className="landing-root--with-sidebar">
-      <DashboardSidebar items={items} onLogout={handleLogout} email={email || undefined} mobileTitle="Чат с поддержкой" />
-
-      <main>
-        <section className="app-page">
-          <div className="container">
-            <SupportPageIntro announcement={announcement} />
-
-            <div className="support-layout">
-              <ChatwootSupportCard email={email} />
-            </div>
-          </div>
-        </section>
-      </main>
-
-      <LandingFooter />
-    </LandingShell>
-  );
-}
-
-const TalkMeChat = () => {
+const Chat = () => {
   const navigate = useNavigate();
   const { email, items, handleLogout } = useDashboardSidebarItems();
-  const announcement = useAnnouncement(email);
+  const [announcement, setAnnouncement] = useState<string | null>(null);
   const [clientId, setClientId] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -603,6 +520,24 @@ const TalkMeChat = () => {
       cancelled = true;
     };
   }, [email, handleAuthError]);
+
+  useEffect(() => {
+    if (!email) return;
+
+    let cancelled = false;
+    fetch(`${apiBase}/announcement`)
+      .then((r) => r.json() as Promise<{ text?: unknown }>)
+      .then((data) => {
+        if (cancelled) return;
+        if (typeof data?.text === "string" && data.text.trim()) {
+          setAnnouncement(data.text.trim());
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [email]);
 
   useEffect(() => {
     let cancelled = false;
@@ -836,7 +771,26 @@ const TalkMeChat = () => {
       <main>
         <section className="app-page">
           <div className="container">
-            <SupportPageIntro announcement={announcement} />
+            {announcement ? (
+              <section
+                className="support-card support-announcement support-announcement--page-start"
+                role="status"
+                aria-label="Важное объявление"
+              >
+                <h2 className="support-card__title">Важное объявление</h2>
+                <p className="support-card__subtitle whitespace-pre-wrap">{announcement}</p>
+              </section>
+            ) : null}
+
+            <div className="app-page__eyebrow">Поддержка 220v</div>
+            <h1 className="app-page__title">Чат с поддержкой</h1>
+            <p className="app-page__subtitle">
+              Если по какой то причине чат не работает, попробуйте написать нам на почту{" "}
+              <a href="mailto:support@220v.shop" className="support-meta__link">
+                support@220v.shop
+              </a>
+              .
+            </p>
 
             <div className="support-layout support2-layout">
               <section className="support-card support2-chat">
@@ -1020,8 +974,5 @@ const TalkMeChat = () => {
     </LandingShell>
   );
 };
-
-/** /chat: Chatwoot widget card when Chatwoot is configured at build time, otherwise the Talk-Me chat. */
-const Chat = () => (getSupportChatProvider() === "chatwoot" ? <ChatwootChat /> : <TalkMeChat />);
 
 export default Chat;

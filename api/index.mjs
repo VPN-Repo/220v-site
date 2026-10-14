@@ -1,5 +1,5 @@
 import "./env.mjs";
-import { createHmac, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import express from "express";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
@@ -11,12 +11,7 @@ import { redis } from "./redis.mjs";
 import { clientError, serverError } from "./http/errors.mjs";
 import { fetchWithTimeout } from "./http/fetchWithTimeout.mjs";
 import { isTimeoutError, publicMessageFromErr, timeoutStatusCode } from "./http/userMessages.mjs";
-import {
-  chatIdentityLimiter,
-  checkoutSessionLimiter,
-  emailUnsubscribeIpLimiter,
-  refClickIpLimiter,
-} from "./http/rateLimit.mjs";
+import { checkoutSessionLimiter, emailUnsubscribeIpLimiter, refClickIpLimiter } from "./http/rateLimit.mjs";
 import { recordReferralEvent, queryReferralEvents } from "./referrals/events.mjs";
 import {
   buildReferralRiskForReferrer,
@@ -1509,23 +1504,6 @@ app.get("/api/announcement", async (_req, res) => {
   } catch {
     return res.json({ text: null });
   }
-});
-
-/**
- * Chatwoot identity validation: HMAC-SHA256(identifier) with the inbox HMAC token.
- * The token never leaves the server; without it identifier_hash is null.
- */
-app.get("/api/chat/identity", requireSession, chatIdentityLimiter, (req, res) => {
-  const identifier = req.session.userUuid;
-  const token = process.env.CHATWOOT_HMAC_TOKEN?.trim();
-  const identifierHash = token ? createHmac("sha256", token).update(identifier).digest("hex") : null;
-  res.set("Cache-Control", "no-store");
-  return res.json({
-    identifier,
-    identifier_hash: identifierHash,
-    email: req.session.email,
-    name: req.session.email,
-  });
 });
 
 app.get("/api/me", requireSession, async (req, res) => {
