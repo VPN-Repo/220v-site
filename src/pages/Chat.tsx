@@ -784,13 +784,14 @@ const Chat = () => {
 
             <div className="app-page__eyebrow">Поддержка 220v</div>
             <h1 className="app-page__title">Чат с поддержкой</h1>
-            <p className="app-page__subtitle">
-              Если по какой то причине чат не работает, попробуйте написать нам на почту{" "}
-              <a href="mailto:support@220v.shop" className="support-meta__link">
+            <div className="support-meta__item support-meta__item--primary support-email-highlight">
+              <p className="support-meta__note support-email-highlight__note">
+                Пока онлайн-чат работает с перебоями — пишите на почту:
+              </p>
+              <a href="mailto:support@220v.shop" className="support-meta__value support-meta__link">
                 support@220v.shop
               </a>
-              .
-            </p>
+            </div>
 
             <div className="support-layout support2-layout">
               <section className="support-card support2-chat">

@@ -1763,6 +1763,30 @@ body.landing-no-scroll { overflow: hidden; }
 .landing-root .support-meta--in-chat {
   margin-top: 16px;
 }
+.landing-root .support-meta__item--primary {
+  border-color: rgba(198, 255, 61, 0.45);
+  background:
+    radial-gradient(320px 200px at 0% 0%, rgba(198, 255, 61, 0.12), transparent 70%),
+    rgba(198, 255, 61, 0.06);
+}
+.landing-root .support-meta__item--primary .support-meta__value {
+  display: inline-block;
+  font-size: 24px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.landing-root .support-email-highlight {
+  margin-top: 16px;
+}
+.landing-root .support-email-highlight .support-email-highlight__note {
+  margin: 0 0 6px;
+}
+.landing-root .support-meta__note {
+  margin: 8px 0 0;
+  color: var(--muted-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
 .landing-root .support-announcement .support-card__title {
   margin-bottom: 6px;
 }
