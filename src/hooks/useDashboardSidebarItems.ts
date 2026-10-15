@@ -48,6 +48,8 @@ export type DashboardSidebarData = {
   userLoading: boolean;
   userError: string | null;
   trafficRestriction: string | null;
+  /** Последний ответ /me (null, пока не загружен). */
+  user: unknown;
 };
 
 export function useDashboardSidebarItems(): DashboardSidebarData {
@@ -129,7 +131,7 @@ export function useDashboardSidebarItems(): DashboardSidebarData {
     if (userInfo.isPremium && !trafficRestriction && !userError) {
       list.push({
         key: "traffic",
-        label: "Купить трафик",
+        label: "Докупить LTE-трафик",
         icon: Gauge,
         onClick: () => navigate("/traffic"),
         match: "/traffic",
@@ -181,6 +183,7 @@ export function useDashboardSidebarItems(): DashboardSidebarData {
     userLoading,
     userError,
     trafficRestriction,
+    user: trafficUser,
   };
 }
 

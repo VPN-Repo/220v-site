@@ -6,6 +6,12 @@ import DashboardSidebar from "@/components/DashboardSidebar";
 import { useDashboardSidebarItems } from "@/hooks/useDashboardSidebarItems";
 import LandingShell from "@/pages/landing/LandingShell";
 import LandingFooter from "@/pages/landing/LandingFooter";
+import {
+  isActivePaidSubscription,
+  shouldHintTrafficInstead,
+  subscriptionMsLeft,
+  trafficInsteadHintText,
+} from "@/lib/lteTraffic";
 
 type BillingMeta = {
   products?: {
@@ -61,7 +67,7 @@ const formatRub = (value: number) => value.toLocaleString("ru-RU");
 
 const Tariff = () => {
   const navigate = useNavigate();
-  const { email, items, handleLogout } = useDashboardSidebarItems();
+  const { email, items, handleLogout, userLoading, userError, trafficRestriction, user } = useDashboardSidebarItems();
   const [priceByKey, setPriceByKey] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
@@ -98,24 +104,43 @@ const Tariff = () => {
     });
   }, [priceByKey]);
 
+  const userReady = !userLoading && !userError && user != null;
+  const msLeft = subscriptionMsLeft(user);
+  const isRenewal = userReady && isActivePaidSubscription(user, msLeft);
+  const showTrafficInsteadHint = userReady && shouldHintTrafficInstead(user, msLeft, trafficRestriction);
+  const title = isRenewal ? "Продление подписки" : "Купить тариф";
+
   return (
     <LandingShell className="landing-root--with-sidebar">
       <DashboardSidebar
         items={items}
         onLogout={handleLogout}
         email={email || undefined}
-        mobileTitle="Покупка тарифа"
+        mobileTitle={isRenewal ? title : "Покупка тарифа"}
       />
 
       <main>
         <section className="price-page">
           <div className="container">
             <div className="price-page__head">
-              <h1 className="price-page__title price-page__title--mobile-hidden">Купить тариф</h1>
+              <h1 className="price-page__title price-page__title--mobile-hidden">{title}</h1>
               <p className="price-page__subtitle">
-                Выберите срок подписки — чем дольше, тем выгоднее
+                {isRenewal
+                  ? "Что вы получите: +1/6/12 мес. доступа"
+                  : "Выберите срок подписки — чем дольше, тем выгоднее"}
               </p>
             </div>
+
+            {showTrafficInsteadHint ? (
+              <div className="lte-notice" data-testid="traffic-instead-hint">
+                <p className="lte-notice__text">{trafficInsteadHintText(msLeft)}</p>
+                <div className="lte-notice__actions">
+                  <button type="button" className="btn btn--primary btn--wide" onClick={() => navigate("/traffic")}>
+                    Докупить LTE-трафик
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="plans plans--page">
               {cards.map((c) => (

@@ -9,6 +9,7 @@ import DashboardSidebar from "@/components/DashboardSidebar";
 import { useDashboardSidebarItems } from "@/hooks/useDashboardSidebarItems";
 import LandingShell from "@/pages/landing/LandingShell";
 import LandingFooter from "@/pages/landing/LandingFooter";
+import { subscriptionEndLabel } from "@/lib/lteTraffic";
 
 type BillingMeta = {
   payments?: BillingPaymentMethod[];
@@ -21,8 +22,8 @@ const TRAFFIC_PRODUCT_KEY: Record<number, string> = {
 };
 
 const GB_LABEL: Record<number, string> = {
-  20: "20 ГБ",
-  50: "50 ГБ",
+  20: "+20 ГБ LTE",
+  50: "+50 ГБ LTE",
 };
 
 const DEFAULT_PAYMENTS: BillingPaymentMethod[] = [
@@ -45,6 +46,7 @@ const TrafficPay = () => {
     userLoading,
     userError,
     trafficRestriction,
+    user,
   } = useDashboardSidebarItems();
 
   const [billingMeta, setBillingMeta] = useState<BillingMeta | null>(null);
@@ -140,7 +142,7 @@ const TrafficPay = () => {
         <section className="price-page">
           <div className="container">
             <div className="price-page__head">
-              <h1 className="price-page__title">Оплата трафика</h1>
+              <h1 className="price-page__title">Оплата LTE-трафика</h1>
               <p className="price-page__subtitle">
                 {productKey
                   ? `Пакет ${GB_LABEL[gb]}${
@@ -177,6 +179,20 @@ const TrafficPay = () => {
                   </div>
                 ) : (
                   <>
+                    <div className="lte-summary" data-testid="traffic-purchase-summary">
+                      <p className="lte-summary__text">
+                        Вы покупаете: <strong>+{gb} ГБ LTE-трафика</strong>
+                        {price != null ? (
+                          <>
+                            {" "}· <strong>{price.toLocaleString("ru-RU")} ₽</strong>
+                          </>
+                        ) : null}
+                        . Действует до {subscriptionEndLabel(user)}. Срок подписки не продлевается.
+                      </p>
+                      <button type="button" className="lte-summary__link" onClick={() => navigate("/tariff")}>
+                        Мне нужно продлить подписку →
+                      </button>
+                    </div>
                     <span className="plan__eyebrow">Способ оплаты</span>
                     <div className="pay-page__methods">
                       {paymentMethods.map((m) => (

@@ -4577,3 +4577,89 @@ body.landing-no-scroll { overflow: hidden; }
   cursor: pointer;
 }
 .dash-modal .dash-modal__link:disabled { color: var(--dm-muted); cursor: not-allowed; }
+
+/* ---------- LTE traffic vs subscription renewal ----------
+   Unscoped on purpose: also rendered inside dashboard modals (Radix portal). */
+.lte-notice {
+  max-width: 640px;
+  margin: 0 auto 28px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.08);
+  color: #ffffff;
+  text-align: left;
+}
+.lte-notice .lte-notice__text {
+  margin: 0;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.lte-notice__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  margin-top: 14px;
+}
+.lte-notice__actions .btn--wide {
+  max-width: none;
+  white-space: normal;
+}
+.lte-notice .lte-notice__link,
+.lte-summary .lte-summary__link {
+  align-self: center;
+  min-height: 44px;
+  padding: 8px 4px;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.lte-notice .lte-notice__link {
+  color: #c7c7c7;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.lte-notice .lte-notice__link:hover { color: #fbbf24; }
+.lte-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid #262626;
+  background: rgba(255, 255, 255, 0.03);
+  text-align: left;
+}
+.lte-summary .lte-summary__text {
+  margin: 0;
+  color: #c7c7c7;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.lte-summary__text strong { color: #ffffff; font-weight: 700; }
+.lte-summary .lte-summary__link {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  text-align: left;
+  min-height: 40px;
+  padding: 6px 0;
+  color: #c6ff3d;
+  font-size: 13px;
+}
+.lte-summary .lte-summary__link:hover { color: #b7f02f; text-decoration: underline; }
+.dash-modal .lte-notice { margin: 0; padding: 16px; }
+.dash-modal .lte-summary { margin-bottom: 0; }
+.landing-root .dash-card__footer-btn { text-align: center; }
+@media (max-width: 480px) {
+  .lte-notice { margin-bottom: 22px; padding: 16px; }
+  .lte-notice .lte-notice__text { font-size: 14px; }
+}
