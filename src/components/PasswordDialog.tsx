@@ -160,6 +160,7 @@ export default function PasswordDialog({ open, onOpenChange, hasPassword, onChan
               <input
                 type="text"
                 inputMode="numeric"
+                pattern="[0-9]*"
                 autoComplete="one-time-code"
                 aria-label="Код из email"
                 placeholder="Код из email"

@@ -4,6 +4,7 @@ import { ArrowRight, Coins, Copy, Gift, Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { apiGet, apiPost } from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
 import { getReferralsProgramStarted, setReferralsProgramStarted } from "@/lib/referralsStorage";
 import DashboardSidebar from "@/components/DashboardSidebar";
 import { useDashboardSidebarItems } from "@/hooks/useDashboardSidebarItems";
@@ -300,29 +301,7 @@ const Referrals = () => {
       return;
     }
 
-    const copyViaExecCommand = () => {
-      const container = copyButtonRef.current;
-      if (!container) {
-        toast.error("Не удалось скопировать");
-        return;
-      }
-      const input = document.createElement("input");
-      input.type = "text";
-      input.value = referralLink;
-      input.style.position = "absolute";
-      input.style.opacity = "0";
-      input.style.height = "0";
-      input.style.fontSize = "16px";
-      container.appendChild(input);
-      input.focus();
-      input.setSelectionRange(0, input.value.length);
-      let ok = false;
-      try {
-        ok = document.execCommand("copy");
-      } catch {
-        ok = false;
-      }
-      container.removeChild(input);
+    void copyText(referralLink, copyButtonRef.current).then((ok) => {
       if (ok) {
         toast.success("Ссылка скопирована!", {
           style: { background: "#0a0a0a", color: "#fff", border: "1px solid #22c55e" },
@@ -333,20 +312,7 @@ const Referrals = () => {
           duration: 8000,
         });
       }
-    };
-
-    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(referralLink).then(
-        () => {
-          toast.success("Ссылка скопирована!", {
-            style: { background: "#0a0a0a", color: "#fff", border: "1px solid #22c55e" },
-          });
-        },
-        () => copyViaExecCommand(),
-      );
-      return;
-    }
-    copyViaExecCommand();
+    });
   };
 
   const updateReferralBlockedStatus = useCallback((data: ReferralStatusResponse) => {
@@ -920,6 +886,8 @@ const Referrals = () => {
               id="referral-days-exchange"
               className="dash-modal__input"
               type="number"
+              inputMode="numeric"
+              pattern="[0-9]*"
               min="1"
               step="1"
               value={daysToExchange}

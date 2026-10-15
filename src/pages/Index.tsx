@@ -844,7 +844,7 @@ const Index = () => {
                 autoComplete="one-time-code"
                 pattern="[0-9]*"
               >
-                <InputOTPGroup className="gap-3">
+                <InputOTPGroup className="login-otp-group gap-3">
                   {[0, 1, 2, 3, 4].map((index) => (
                     <InputOTPSlot key={index} index={index} className={OTP_SLOT_CLASS} />
                   ))}

@@ -69,7 +69,15 @@
 .landing-root .nav__link,
 .landing-root .dashboard-sidebar__link,
 .landing-root .dash-actions__btn,
-.landing-root .instructions-platform-card {
+.landing-root .instructions-platform-card,
+.landing-root input,
+.landing-root textarea,
+.landing-root select,
+.landing-root label,
+.dash-modal button,
+.dash-modal a,
+.dash-modal input,
+.dash-modal textarea {
   touch-action: manipulation;
 }
 
@@ -107,6 +115,12 @@
 .landing-root main,
 .landing-root header,
 .landing-root footer { position: relative; z-index: 1; }
+/* Landscape phones: keep content clear of the notch / rounded corners
+   (header and footer already pad themselves). Zero on desktop. */
+.landing-root main {
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
 
 /* ---------- Buttons ---------- */
 .landing-root .btn {
@@ -122,7 +136,9 @@
   white-space: nowrap;
   min-height: 48px;
 }
-.landing-root .btn:hover { transform: translateY(-1px); }
+@media (hover: hover) {
+  .landing-root .btn:hover { transform: translateY(-1px); }
+}
 .landing-root .btn:active { transform: translateY(0); }
 
 .landing-root .btn--primary {
@@ -130,14 +146,18 @@
   color: #0a0a0a;
   box-shadow: 0 10px 30px rgba(198, 255, 61, 0.25);
 }
-.landing-root .btn--primary:hover { background: var(--accent-2); box-shadow: 0 12px 34px rgba(198, 255, 61, 0.35); }
+@media (hover: hover) {
+  .landing-root .btn--primary:hover { background: var(--accent-2); box-shadow: 0 12px 34px rgba(198, 255, 61, 0.35); }
+}
 
 .landing-root .btn--ghost {
   border: 1.5px solid var(--accent);
   color: #fff;
   padding: 10px 24px;
 }
-.landing-root .btn--ghost:hover { background: var(--accent); color: #0a0a0a; }
+@media (hover: hover) {
+  .landing-root .btn--ghost:hover { background: var(--accent); color: #0a0a0a; }
+}
 
 .landing-root .btn--lg { padding: 16px 28px; font-size: 16px; }
 .landing-root .btn--wide { width: 100%; max-width: 520px; }
@@ -190,7 +210,9 @@
   cursor: pointer;
   text-align: left;
 }
-.landing-root .nav__link:hover { color: var(--accent); }
+@media (hover: hover) {
+  .landing-root .nav__link:hover { color: var(--accent); }
+}
 
 .landing-root .header__nav-cta {
   display: flex;
@@ -338,7 +360,9 @@
   color: var(--muted-2);
   transition: color .2s ease;
 }
-.landing-root .footer__link:hover { color: var(--accent); }
+@media (hover: hover) {
+  .landing-root .footer__link:hover { color: var(--accent); }
+}
 .landing-root .footer__dot { color: var(--muted); font-size: 14px; }
 .landing-root .footer__copy {
   color: var(--muted);
@@ -360,6 +384,7 @@
 .landing-root .modal__backdrop {
   position: absolute;
   inset: 0;
+  touch-action: none;
   background: rgba(5, 5, 5, 0.72);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -369,7 +394,9 @@
   position: relative;
   width: 100%;
   max-width: 560px;
-  max-height: calc(100dvh - 48px);
+  /* Fit between the .modal paddings (which include the safe areas). */
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - max(24px, calc(var(--safe-top) + 16px)) - max(24px, calc(var(--safe-bottom) + 16px)));
   overflow-y: auto;
   overscroll-behavior: contain;
   background: linear-gradient(180deg, var(--card-2), var(--card));
@@ -395,7 +422,9 @@
   background: rgba(255,255,255,0.04);
   transition: background .2s ease, color .2s ease;
 }
-.landing-root .modal__close:hover { background: rgba(198, 255, 61, 0.15); color: var(--accent); }
+@media (hover: hover) {
+  .landing-root .modal__close:hover { background: rgba(198, 255, 61, 0.15); color: var(--accent); }
+}
 
 .landing-root .modal__title {
   font-size: 28px;
@@ -418,7 +447,9 @@
   text-align: center;
 }
 .landing-root .modal__link { color: var(--accent); }
-.landing-root .modal__link:hover { text-decoration: underline; }
+@media (hover: hover) {
+  .landing-root .modal__link:hover { text-decoration: underline; }
+}
 
 .landing-root.no-scroll,
 body.landing-no-scroll { overflow: hidden; }
@@ -446,7 +477,9 @@ body.landing-no-scroll { overflow: hidden; }
   flex-direction: column;
   transition: border-color .2s ease, transform .2s ease;
 }
-.landing-root .plan:hover { border-color: rgba(198,255,61,0.35); transform: translateY(-2px); }
+@media (hover: hover) {
+  .landing-root .plan:hover { border-color: rgba(198,255,61,0.35); transform: translateY(-2px); }
+}
 .landing-root .plan--featured {
   border-color: rgba(198,255,61,0.55);
   background:
@@ -597,7 +630,9 @@ body.landing-no-scroll { overflow: hidden; }
   margin-bottom: 18px;
   transition: color 0.2s ease;
 }
-.landing-root .pay-page__back:hover { color: var(--accent); }
+@media (hover: hover) {
+  .landing-root .pay-page__back:hover { color: var(--accent); }
+}
 .landing-root .pay-page__card {
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border);
@@ -1000,8 +1035,10 @@ body.landing-no-scroll { overflow: hidden; }
 .unsubscribe-dialog .dialog-close {
   color: #c7c7c7;
 }
-.unsubscribe-dialog .dialog-close:hover {
-  color: #c6ff3d;
+@media (hover: hover) {
+  .unsubscribe-dialog .dialog-close:hover {
+    color: #c6ff3d;
+  }
 }
 .unsubscribe-dialog h2 {
   color: #ffffff;
@@ -1103,8 +1140,10 @@ body.landing-no-scroll { overflow: hidden; }
   color: var(--accent);
   font-weight: 700;
 }
-.landing-root .nav__link--primary:hover {
-  color: var(--accent-2);
+@media (hover: hover) {
+  .landing-root .nav__link--primary:hover {
+    color: var(--accent-2);
+  }
 }
 .landing-root .app-page__panel,
 .landing-root .app-sidebar,
@@ -1166,11 +1205,13 @@ body.landing-no-scroll { overflow: hidden; }
   text-align: left;
   transition: transform .15s ease, border-color .2s ease, background .2s ease, color .2s ease;
 }
-.landing-root .app-sidebar__link:hover {
-  transform: translateY(-1px);
-  border-color: rgba(198, 255, 61, 0.28);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text);
+@media (hover: hover) {
+  .landing-root .app-sidebar__link:hover {
+    transform: translateY(-1px);
+    border-color: rgba(198, 255, 61, 0.28);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+  }
 }
 .landing-root .app-sidebar__link--primary {
   border-color: rgba(198, 255, 61, 0.35);
@@ -1265,10 +1306,12 @@ body.landing-no-scroll { overflow: hidden; }
   text-align: left;
   transition: transform .15s ease, border-color .2s ease, background .2s ease;
 }
-.landing-root .app-action:hover {
-  transform: translateY(-1px);
-  border-color: rgba(198, 255, 61, 0.3);
-  background: rgba(255, 255, 255, 0.04);
+@media (hover: hover) {
+  .landing-root .app-action:hover {
+    transform: translateY(-1px);
+    border-color: rgba(198, 255, 61, 0.3);
+    background: rgba(255, 255, 255, 0.04);
+  }
 }
 .landing-root .app-action__row,
 .landing-root .app-progress__row {
@@ -1372,10 +1415,12 @@ body.landing-no-scroll { overflow: hidden; }
   -webkit-backdrop-filter: blur(14px);
   transition: transform .15s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease;
 }
-.landing-root .instructions-platform-select:hover {
-  transform: translateY(-1px);
-  border-color: rgba(198, 255, 61, 0.32);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.04));
+@media (hover: hover) {
+  .landing-root .instructions-platform-select:hover {
+    transform: translateY(-1px);
+    border-color: rgba(198, 255, 61, 0.32);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.04));
+  }
 }
 .landing-root .instructions-platform-select[data-state="open"] {
   border-color: rgba(198, 255, 61, 0.36);
@@ -1496,11 +1541,13 @@ body.landing-no-scroll { overflow: hidden; }
   height: 14px;
   flex-shrink: 0;
 }
-.landing-root .instructions-platform-card:hover {
-  transform: translateY(-1px);
-  border-color: rgba(198, 255, 61, 0.28);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text);
+@media (hover: hover) {
+  .landing-root .instructions-platform-card:hover {
+    transform: translateY(-1px);
+    border-color: rgba(198, 255, 61, 0.28);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+  }
 }
 .landing-root .instructions-platform-card--active {
   border-color: rgba(198, 255, 61, 0.38);
@@ -1567,10 +1614,12 @@ body.landing-no-scroll { overflow: hidden; }
   vertical-align: baseline;
   transition: color .2s ease, opacity .2s ease;
 }
-.landing-root .instructions-inline-link:hover {
-  color: var(--accent-2);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+@media (hover: hover) {
+  .landing-root .instructions-inline-link:hover {
+    color: var(--accent-2);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 }
 .landing-root .instruction-primary-button {
   width: min(100%, 340px);
@@ -1581,9 +1630,11 @@ body.landing-no-scroll { overflow: hidden; }
   color: #0a0a0a;
   box-shadow: 0 10px 30px rgba(198, 255, 61, 0.2);
 }
-.landing-root .instruction-primary-button:hover {
-  background: var(--accent-2);
-  color: #0a0a0a;
+@media (hover: hover) {
+  .landing-root .instruction-primary-button:hover {
+    background: var(--accent-2);
+    color: #0a0a0a;
+  }
 }
 .landing-root .instruction-action-row {
   position: relative;
@@ -1601,10 +1652,12 @@ body.landing-no-scroll { overflow: hidden; }
   color: var(--text);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
-.landing-root .instruction-secondary-button:hover {
-  border-color: rgba(198, 255, 61, 0.36);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text);
+@media (hover: hover) {
+  .landing-root .instruction-secondary-button:hover {
+    border-color: rgba(198, 255, 61, 0.36);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+  }
 }
 .landing-root .app-page__notice {
   max-width: 480px;
@@ -1736,8 +1789,10 @@ body.landing-no-scroll { overflow: hidden; }
 .landing-root .support-meta__link {
   color: var(--accent);
 }
-.landing-root .support-meta__link:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .landing-root .support-meta__link:hover {
+    text-decoration: underline;
+  }
 }
 .landing-root .support-chat {
   min-height: 480px;
@@ -1818,6 +1873,7 @@ body.landing-no-scroll { overflow: hidden; }
   z-index: 1;
   flex: 1;
   min-height: 380px;
+  max-height: 56vh;
   max-height: 56dvh;
   overflow-y: auto;
   display: flex;
@@ -1924,9 +1980,11 @@ body.landing-no-scroll { overflow: hidden; }
   background: rgba(0, 0, 0, 0.24);
   object-fit: contain;
 }
-.landing-root .support2-attachment--image:hover img,
-.landing-root .support2-attachment__image-preview:hover img {
-  border-color: rgba(255, 255, 255, 0.28);
+@media (hover: hover) {
+  .landing-root .support2-attachment--image:hover img,
+  .landing-root .support2-attachment__image-preview:hover img {
+    border-color: rgba(255, 255, 255, 0.28);
+  }
 }
 .landing-root .support2-attachment--image span,
 .landing-root .support2-attachment--video a {
@@ -1974,14 +2032,22 @@ body.landing-no-scroll { overflow: hidden; }
   align-items: center;
   justify-content: center;
   padding: 24px;
+  padding:
+    max(24px, calc(var(--safe-top, 0px) + 12px))
+    max(24px, calc(var(--safe-right, 0px) + 12px))
+    max(24px, calc(var(--safe-bottom, 0px) + 12px))
+    max(24px, calc(var(--safe-left, 0px) + 12px));
   background: rgba(0, 0, 0, 0.82);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  overscroll-behavior: contain;
+  touch-action: pinch-zoom;
   cursor: zoom-out;
 }
 .support2-lightbox__close {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: calc(16px + var(--safe-top, 0px));
+  right: calc(16px + var(--safe-right, 0px));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1993,8 +2059,10 @@ body.landing-no-scroll { overflow: hidden; }
   color: #fff;
   cursor: pointer;
 }
-.support2-lightbox__close:hover {
-  background: rgba(0, 0, 0, 0.7);
+@media (hover: hover) {
+  .support2-lightbox__close:hover {
+    background: rgba(0, 0, 0, 0.7);
+  }
 }
 .support2-lightbox__figure {
   margin: 0;
@@ -2008,6 +2076,7 @@ body.landing-no-scroll { overflow: hidden; }
 .support2-lightbox__figure img {
   max-width: 100%;
   max-height: calc(100vh - 120px);
+  max-height: calc(100dvh - 120px - var(--safe-top, 0px) - var(--safe-bottom, 0px));
   border-radius: 12px;
   object-fit: contain;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
@@ -2022,6 +2091,10 @@ body.landing-no-scroll { overflow: hidden; }
   font-size: 13px;
   font-weight: 700;
   text-align: center;
+}
+.support2-lightbox__caption span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .support2-lightbox__caption a {
   color: #fff;
@@ -2091,10 +2164,12 @@ body.landing-no-scroll { overflow: hidden; }
   cursor: pointer;
   transition: border-color .2s ease, background .2s ease, transform .2s ease;
 }
-.landing-root .support2-chat__attach:hover:not(:disabled) {
-  border-color: rgba(198, 255, 61, 0.55);
-  background: rgba(198, 255, 61, 0.14);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .landing-root .support2-chat__attach:hover:not(:disabled) {
+    border-color: rgba(198, 255, 61, 0.55);
+    background: rgba(198, 255, 61, 0.14);
+    transform: translateY(-1px);
+  }
 }
 .landing-root .support2-chat__attach:disabled {
   cursor: not-allowed;
@@ -2149,10 +2224,12 @@ body.landing-no-scroll { overflow: hidden; }
   cursor: pointer;
   transition: border-color .2s ease, background .2s ease, transform .2s ease;
 }
-.landing-root .support2-chat__send:hover:not(:disabled) {
-  border-color: rgba(198, 255, 61, 0.62);
-  background: rgba(198, 255, 61, 0.2);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .landing-root .support2-chat__send:hover:not(:disabled) {
+    border-color: rgba(198, 255, 61, 0.62);
+    background: rgba(198, 255, 61, 0.2);
+    transform: translateY(-1px);
+  }
 }
 .landing-root .support2-chat__send:disabled {
   cursor: not-allowed;
@@ -2175,10 +2252,13 @@ body.landing-no-scroll { overflow: hidden; }
   margin-bottom: 28px;
   transition: color .2s ease;
 }
-.landing-root .doc__back:hover { color: var(--accent); }
+@media (hover: hover) {
+  .landing-root .doc__back:hover { color: var(--accent); }
+}
 .landing-root .doc__content {
   max-width: 820px;
   margin: 0 auto;
+  overflow-wrap: anywhere;
 }
 .landing-root .doc__content h1 {
   font-size: clamp(28px, 3.4vw, 40px);
@@ -2217,7 +2297,9 @@ body.landing-no-scroll { overflow: hidden; }
   line-height: 1.65;
 }
 .landing-root .doc__content a { color: var(--accent); }
-.landing-root .doc__content a:hover { text-decoration: underline; }
+@media (hover: hover) {
+  .landing-root .doc__content a:hover { text-decoration: underline; }
+}
 .landing-root .doc__content strong { color: #fff; font-weight: 700; }
 .landing-root .doc__notice {
   border: 1px solid rgba(198, 255, 61, 0.25);
@@ -2327,7 +2409,9 @@ body.landing-no-scroll { overflow: hidden; }
   font: inherit;
   cursor: pointer;
 }
-.landing-root .login-card .form-link button:hover { text-decoration: underline; }
+@media (hover: hover) {
+  .landing-root .login-card .form-link button:hover { text-decoration: underline; }
+}
 .landing-root .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
 /* ---------- Responsive ---------- */
@@ -2340,7 +2424,11 @@ body.landing-no-scroll { overflow: hidden; }
     right: 0;
     flex-direction: column;
     gap: 0;
-    padding: 16px 24px;
+    padding: 16px max(24px, var(--safe-right)) 16px max(24px, var(--safe-left));
+    max-height: calc(100vh - 96px);
+    max-height: calc(100dvh - 96px - var(--safe-top));
+    overflow-y: auto;
+    overscroll-behavior: contain;
     background: rgba(10, 10, 10, 0.98);
     border-bottom: 1px solid var(--border);
     backdrop-filter: blur(12px);
@@ -2478,7 +2566,11 @@ body.landing-no-scroll { overflow: hidden; }
   .landing-root .modal {
     padding: max(12px, calc(var(--safe-top) + 10px)) max(12px, var(--safe-right)) max(12px, calc(var(--safe-bottom) + 10px)) max(12px, var(--safe-left));
   }
-  .landing-root .modal__dialog { border-radius: 20px; padding: 28px 16px 20px; }
+  .landing-root .modal__dialog {
+    border-radius: 20px;
+    padding: 28px 16px 20px;
+    max-height: calc(100dvh - max(12px, calc(var(--safe-top) + 10px)) - max(12px, calc(var(--safe-bottom) + 10px)));
+  }
   .landing-root .modal__title { font-size: 22px; padding-right: 36px; }
   .landing-root .modal__subtitle { font-size: 14px; margin-bottom: 20px; }
   .landing-root .modal__body p { font-size: 15px; }
@@ -2518,10 +2610,20 @@ body.landing-no-scroll { overflow: hidden; }
     flex-direction: column;
     gap: 2px;
   }
+  /* 5 OTP slots of 3.6rem + gaps are wider than the login modal below ~400px. */
+  .landing-root .login-card .login-otp-group {
+    gap: 8px;
+  }
+  .landing-root .login-card .otp-slot {
+    width: clamp(40px, 13vw, 3.6rem);
+    height: clamp(48px, 15vw, 3.6rem);
+    font-size: clamp(1.75rem, 8vw, 2.5rem);
+  }
 }
 
 @media (max-width: 380px) {
   .landing-root .container { padding: 0 14px; }
+  .landing-root .btn { white-space: normal; text-align: center; }
   .landing-root .logo__img { height: 52px; margin: -10px 0; }
   .landing-root .hero__title { font-size: clamp(24px, 8vw, 32px); letter-spacing: -0.5px; }
   .landing-root .hero__desc { font-size: 14px; }
@@ -2594,9 +2696,11 @@ body.landing-no-scroll { overflow: hidden; }
   flex-shrink: 0;
 }
 
-.landing-root .dashboard-sidebar__close:hover {
-  color: var(--accent);
-  border-color: rgba(198, 255, 61, 0.35);
+@media (hover: hover) {
+  .landing-root .dashboard-sidebar__close:hover {
+    color: var(--accent);
+    border-color: rgba(198, 255, 61, 0.35);
+  }
 }
 
 .landing-root .dashboard-sidebar__burger {
@@ -2617,9 +2721,11 @@ body.landing-no-scroll { overflow: hidden; }
   -webkit-backdrop-filter: blur(10px);
 }
 
-.landing-root .dashboard-sidebar__burger:hover {
-  color: var(--accent);
-  border-color: rgba(198, 255, 61, 0.35);
+@media (hover: hover) {
+  .landing-root .dashboard-sidebar__burger:hover {
+    color: var(--accent);
+    border-color: rgba(198, 255, 61, 0.35);
+  }
 }
 
 .landing-root .dashboard-sidebar__mobile-title {
@@ -2636,6 +2742,7 @@ body.landing-no-scroll { overflow: hidden; }
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
   z-index: 59;
+  touch-action: none;
   animation: dashboard-sidebar-fade 0.18s ease-out;
 }
 
@@ -2650,6 +2757,7 @@ body.landing-no-scroll { overflow: hidden; }
   gap: 4px;
   margin-top: 4px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   flex: 1;
   /* Запас по 2px с обеих сторон, чтобы overflow не обрезал box-shadow-обводку
      у активного пункта меню (overflow-y: auto включает клиппинг и по X). */
@@ -2675,10 +2783,12 @@ body.landing-no-scroll { overflow: hidden; }
   cursor: pointer;
 }
 
-.landing-root .dashboard-sidebar__link:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.04);
-  border-color: var(--border);
+@media (hover: hover) {
+  .landing-root .dashboard-sidebar__link:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--border);
+  }
 }
 
 .landing-root .dashboard-sidebar__link-icon {
@@ -2687,8 +2797,10 @@ body.landing-no-scroll { overflow: hidden; }
   transition: color 0.18s ease;
 }
 
-.landing-root .dashboard-sidebar__link:hover .dashboard-sidebar__link-icon {
-  color: var(--accent);
+@media (hover: hover) {
+  .landing-root .dashboard-sidebar__link:hover .dashboard-sidebar__link-icon {
+    color: var(--accent);
+  }
 }
 
 .landing-root .dashboard-sidebar__link--primary {
@@ -2702,14 +2814,15 @@ body.landing-no-scroll { overflow: hidden; }
   color: #0a0a0a;
 }
 
-.landing-root .dashboard-sidebar__link--primary:hover {
-  background: var(--accent-2);
-  border-color: var(--accent-2);
-  color: #0a0a0a;
-}
-
-.landing-root .dashboard-sidebar__link--primary:hover .dashboard-sidebar__link-icon {
-  color: #0a0a0a;
+@media (hover: hover) {
+  .landing-root .dashboard-sidebar__link--primary:hover {
+    background: var(--accent-2);
+    border-color: var(--accent-2);
+    color: #0a0a0a;
+  }
+  .landing-root .dashboard-sidebar__link--primary:hover .dashboard-sidebar__link-icon {
+    color: #0a0a0a;
+  }
 }
 
 .landing-root .dashboard-sidebar__link--active {
@@ -2742,20 +2855,21 @@ body.landing-no-scroll { overflow: hidden; }
 /* Hover на активном пункте (в т.ч. «Моя подписка» = primary + active):
    перекрываем общий :hover, чтобы не терялся акцентный фон и обводка,
    а сам hover давал чуть более яркий оттенок. */
-.landing-root .dashboard-sidebar__link--active:hover,
-.landing-root
+@media (hover: hover) {
+  .landing-root .dashboard-sidebar__link--active:hover,
+  .landing-root
   .dashboard-sidebar__link--primary.dashboard-sidebar__link--active:hover {
-  color: #0a0a0a;
-  background: var(--accent-2);
-  border-color: var(--accent-2);
-  box-shadow: 0 0 0 2px rgba(198, 255, 61, 0.45);
-}
-
-.landing-root .dashboard-sidebar__link--active:hover .dashboard-sidebar__link-icon,
-.landing-root
+    color: #0a0a0a;
+    background: var(--accent-2);
+    border-color: var(--accent-2);
+    box-shadow: 0 0 0 2px rgba(198, 255, 61, 0.45);
+  }
+  .landing-root .dashboard-sidebar__link--active:hover .dashboard-sidebar__link-icon,
+  .landing-root
   .dashboard-sidebar__link--primary.dashboard-sidebar__link--active:hover
   .dashboard-sidebar__link-icon {
-  color: #0a0a0a;
+    color: #0a0a0a;
+  }
 }
 
 .landing-root .dashboard-sidebar__foot {
@@ -2772,14 +2886,15 @@ body.landing-no-scroll { overflow: hidden; }
   color: #f87171;
 }
 
-.landing-root .dashboard-sidebar__link--logout:hover {
-  color: #fff;
-  background: rgba(248, 113, 113, 0.15);
-  border-color: rgba(248, 113, 113, 0.35);
-}
-
-.landing-root .dashboard-sidebar__link--logout:hover .dashboard-sidebar__link-icon {
-  color: #fff;
+@media (hover: hover) {
+  .landing-root .dashboard-sidebar__link--logout:hover {
+    color: #fff;
+    background: rgba(248, 113, 113, 0.15);
+    border-color: rgba(248, 113, 113, 0.35);
+  }
+  .landing-root .dashboard-sidebar__link--logout:hover .dashboard-sidebar__link-icon {
+    color: #fff;
+  }
 }
 
 @media (max-width: 960px) {
@@ -2850,10 +2965,15 @@ body.landing-no-scroll { overflow: hidden; }
   .landing-root button.dashboard-sidebar__mobile-title {
     cursor: pointer;
   }
-  .landing-root .dashboard-sidebar__mobile-title:hover,
   .landing-root .dashboard-sidebar__mobile-title--open {
     color: var(--accent);
     border-color: rgba(198, 255, 61, 0.35);
+  }
+  @media (hover: hover) {
+    .landing-root .dashboard-sidebar__mobile-title:hover {
+      color: var(--accent);
+      border-color: rgba(198, 255, 61, 0.35);
+    }
   }
   .landing-root .dashboard-sidebar__mobile-title span {
     min-width: 0;
@@ -2896,7 +3016,7 @@ body.landing-no-scroll { overflow: hidden; }
     display: block;
   }
   .landing-root--with-sidebar .app-page {
-    padding-top: 72px;
+    padding-top: calc(72px + var(--safe-top));
   }
   .landing-root--with-sidebar .price-page {
     padding-top: calc(88px + var(--safe-top));
@@ -3003,6 +3123,27 @@ body.landing-no-scroll { overflow: hidden; }
   .landing-root--chat .support2-chat__form {
     margin-top: 12px;
   }
+  /* Keyboard open: it already covers the home indicator / gesture bar. */
+  .landing-root--chat.landing-root--chat-composer-focused .support-card.support2-chat {
+    padding-bottom: 12px;
+  }
+}
+
+/* Short landscape phones with the keyboard up: give the space to messages. */
+@media (max-width: 960px) and (max-height: 500px) {
+  .landing-root--chat.landing-root--chat-composer-focused .support2-chat__header,
+  .landing-root--chat.landing-root--chat-composer-focused .support-announcement--page-start {
+    display: none;
+  }
+  .landing-root--chat .support-card.support2-chat {
+    padding-top: 12px;
+  }
+}
+
+/* Landscape phones: the mascot alone must not fill the first screen. */
+@media (max-width: 960px) and (orientation: landscape) and (max-height: 500px) {
+  .landing-root .hero__visual { min-height: 0; }
+  .landing-root .hero__mascot { max-height: 220px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3177,10 +3318,12 @@ body.landing-no-scroll { overflow: hidden; }
   letter-spacing: -0.2px;
   transition: background .2s ease, box-shadow .2s ease, transform .12s ease;
 }
-.landing-root .dash-hero__cta:hover {
-  background: var(--accent-2);
-  box-shadow: 0 14px 34px rgba(198, 255, 61, 0.28);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .landing-root .dash-hero__cta:hover {
+    background: var(--accent-2);
+    box-shadow: 0 14px 34px rgba(198, 255, 61, 0.28);
+    transform: translateY(-1px);
+  }
 }
 .landing-root .dash-hero__cta:focus-visible {
   outline: 2px solid var(--accent);
@@ -3190,9 +3333,11 @@ body.landing-no-scroll { overflow: hidden; }
   background: #ff6b6b;
   color: #fff;
 }
-.landing-root .dash-hero--danger .dash-hero__cta:hover {
-  background: #ff5555;
-  box-shadow: 0 14px 34px rgba(255, 107, 107, 0.32);
+@media (hover: hover) {
+  .landing-root .dash-hero--danger .dash-hero__cta:hover {
+    background: #ff5555;
+    box-shadow: 0 14px 34px rgba(255, 107, 107, 0.32);
+  }
 }
 
 .landing-root .dash-ring {
@@ -3288,14 +3433,18 @@ body.landing-no-scroll { overflow: hidden; }
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
   transition: border-color .2s ease, transform .15s ease;
 }
-.landing-root .dash-card:hover {
-  border-color: rgba(198, 255, 61, 0.22);
+@media (hover: hover) {
+  .landing-root .dash-card:hover {
+    border-color: rgba(198, 255, 61, 0.22);
+  }
 }
 .landing-root .dash-card--danger {
   border-color: rgba(255, 89, 89, 0.3);
 }
-.landing-root .dash-card--danger:hover {
-  border-color: rgba(255, 89, 89, 0.45);
+@media (hover: hover) {
+  .landing-root .dash-card--danger:hover {
+    border-color: rgba(255, 89, 89, 0.45);
+  }
 }
 .landing-root .dash-card__head {
   display: flex;
@@ -3375,10 +3524,12 @@ body.landing-no-scroll { overflow: hidden; }
   letter-spacing: -0.2px;
   transition: background .2s ease, box-shadow .2s ease, transform .1s ease;
 }
-.landing-root .dash-card__primary:hover:not(:disabled) {
-  background: var(--accent-2);
-  box-shadow: 0 12px 30px rgba(198, 255, 61, 0.25);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .landing-root .dash-card__primary:hover:not(:disabled) {
+    background: var(--accent-2);
+    box-shadow: 0 12px 30px rgba(198, 255, 61, 0.25);
+    transform: translateY(-1px);
+  }
 }
 .landing-root .dash-card__primary:focus-visible {
   outline: 2px solid var(--accent);
@@ -3416,11 +3567,13 @@ body.landing-no-scroll { overflow: hidden; }
 .landing-root .dash-actions__btn svg {
   color: var(--accent);
 }
-.landing-root .dash-actions__btn:hover:not(:disabled) {
-  border-color: rgba(198, 255, 61, 0.35);
-  background: rgba(198, 255, 61, 0.08);
-  color: var(--text);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .landing-root .dash-actions__btn:hover:not(:disabled) {
+    border-color: rgba(198, 255, 61, 0.35);
+    background: rgba(198, 255, 61, 0.08);
+    color: var(--text);
+    transform: translateY(-1px);
+  }
 }
 .landing-root .dash-actions__btn:disabled {
   opacity: 0.45;
@@ -3513,17 +3666,21 @@ body.landing-no-scroll { overflow: hidden; }
 .landing-root .dash-card__footer-btn svg {
   color: var(--accent);
 }
-.landing-root .dash-card__footer-btn:hover {
-  border-color: rgba(198, 255, 61, 0.35);
-  background: rgba(198, 255, 61, 0.08);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .landing-root .dash-card__footer-btn:hover {
+    border-color: rgba(198, 255, 61, 0.35);
+    background: rgba(198, 255, 61, 0.08);
+    transform: translateY(-1px);
+  }
 }
 .landing-root .dash-card--danger .dash-card__footer-btn svg {
   color: #ff9a9a;
 }
-.landing-root .dash-card--danger .dash-card__footer-btn:hover {
-  border-color: rgba(255, 89, 89, 0.4);
-  background: rgba(255, 89, 89, 0.08);
+@media (hover: hover) {
+  .landing-root .dash-card--danger .dash-card__footer-btn:hover {
+    border-color: rgba(255, 89, 89, 0.4);
+    background: rgba(255, 89, 89, 0.08);
+  }
 }
 .landing-root .dash-card__footer-link {
   display: inline-flex;
@@ -3535,8 +3692,10 @@ body.landing-no-scroll { overflow: hidden; }
   font-weight: 600;
   transition: color .2s ease;
 }
-.landing-root .dash-card__footer-link:hover {
-  color: var(--accent);
+@media (hover: hover) {
+  .landing-root .dash-card__footer-link:hover {
+    color: var(--accent);
+  }
 }
 
 @media (max-width: 1100px) {
@@ -3657,9 +3816,11 @@ body.landing-no-scroll { overflow: hidden; }
   top: 14px;
   transition: color 0.2s ease, background 0.2s ease, transform 0.12s ease;
 }
-.dash-modal .dialog-close:hover {
-  color: var(--dm-accent);
-  background: rgba(198, 255, 61, 0.1);
+@media (hover: hover) {
+  .dash-modal .dialog-close:hover {
+    color: var(--dm-accent);
+    background: rgba(198, 255, 61, 0.1);
+  }
 }
 .dash-modal .dialog-close:focus-visible {
   outline: 2px solid var(--dm-accent);
@@ -3707,10 +3868,12 @@ body.landing-no-scroll { overflow: hidden; }
   background: var(--dm-accent);
   color: #0a0a0a;
 }
-.dash-modal .dash-modal-btn--primary:hover:not(:disabled) {
-  background: var(--dm-accent-2);
-  box-shadow: 0 14px 34px rgba(198, 255, 61, 0.28);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .dash-modal .dash-modal-btn--primary:hover:not(:disabled) {
+    background: var(--dm-accent-2);
+    box-shadow: 0 14px 34px rgba(198, 255, 61, 0.28);
+    transform: translateY(-1px);
+  }
 }
 
 .dash-modal .dash-modal-btn--ghost {
@@ -3718,10 +3881,12 @@ body.landing-no-scroll { overflow: hidden; }
   border-color: var(--dm-border);
   color: var(--dm-text);
 }
-.dash-modal .dash-modal-btn--ghost:hover:not(:disabled) {
-  background: rgba(198, 255, 61, 0.08);
-  border-color: rgba(198, 255, 61, 0.35);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .dash-modal .dash-modal-btn--ghost:hover:not(:disabled) {
+    background: rgba(198, 255, 61, 0.08);
+    border-color: rgba(198, 255, 61, 0.35);
+    transform: translateY(-1px);
+  }
 }
 
 .dash-modal .dash-modal-btn--danger {
@@ -3729,11 +3894,13 @@ body.landing-no-scroll { overflow: hidden; }
   border-color: rgba(255, 89, 89, 0.35);
   color: #ff9a9a;
 }
-.dash-modal .dash-modal-btn--danger:hover:not(:disabled) {
-  background: #ff6b6b;
-  border-color: #ff6b6b;
-  color: #fff;
-  box-shadow: 0 14px 34px rgba(255, 107, 107, 0.28);
+@media (hover: hover) {
+  .dash-modal .dash-modal-btn--danger:hover:not(:disabled) {
+    background: #ff6b6b;
+    border-color: #ff6b6b;
+    color: #fff;
+    box-shadow: 0 14px 34px rgba(255, 107, 107, 0.28);
+  }
 }
 
 .dash-modal .dash-modal-btn--split {
@@ -3745,8 +3912,10 @@ body.landing-no-scroll { overflow: hidden; }
   color: var(--dm-accent);
   font-weight: 800;
 }
-.dash-modal .dash-modal-btn--split:hover .dash-modal-btn__price {
-  color: #0a0a0a;
+@media (hover: hover) {
+  .dash-modal .dash-modal-btn--split:hover .dash-modal-btn__price {
+    color: #0a0a0a;
+  }
 }
 
 .dash-modal .dash-modal-btn--menu {
@@ -3761,8 +3930,10 @@ body.landing-no-scroll { overflow: hidden; }
 .dash-modal .dash-modal-btn--menu.dash-modal-btn--danger svg {
   color: #ff9a9a;
 }
-.dash-modal .dash-modal-btn--menu.dash-modal-btn--danger:hover:not(:disabled) svg {
-  color: #fff;
+@media (hover: hover) {
+  .dash-modal .dash-modal-btn--menu.dash-modal-btn--danger:hover:not(:disabled) svg {
+    color: #fff;
+  }
 }
 
 .dash-modal .dash-modal-btn--back {
@@ -3775,10 +3946,12 @@ body.landing-no-scroll { overflow: hidden; }
   background: transparent;
   border-color: transparent;
 }
-.dash-modal .dash-modal-btn--back:hover:not(:disabled) {
-  color: var(--dm-accent);
-  background: rgba(198, 255, 61, 0.08);
-  transform: none;
+@media (hover: hover) {
+  .dash-modal .dash-modal-btn--back:hover:not(:disabled) {
+    color: var(--dm-accent);
+    background: rgba(198, 255, 61, 0.08);
+    transform: none;
+  }
 }
 
 /* Grouped column stack used in most modals */
@@ -3852,9 +4025,11 @@ body.landing-no-scroll { overflow: hidden; }
   background: rgba(255, 255, 255, 0.03);
   transition: border-color 0.2s ease, background 0.2s ease;
 }
-.dash-modal .dash-modal__item:hover {
-  border-color: rgba(198, 255, 61, 0.22);
-  background: rgba(198, 255, 61, 0.04);
+@media (hover: hover) {
+  .dash-modal .dash-modal__item:hover {
+    border-color: rgba(198, 255, 61, 0.22);
+    background: rgba(198, 255, 61, 0.04);
+  }
 }
 .dash-modal .dash-modal__item--button {
   width: 100%;
@@ -3912,10 +4087,12 @@ body.landing-no-scroll { overflow: hidden; }
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
-.dash-modal .dash-modal__item-remove:hover:not(:disabled) {
-  background: #ff6b6b;
-  border-color: #ff6b6b;
-  color: #fff;
+@media (hover: hover) {
+  .dash-modal .dash-modal__item-remove:hover:not(:disabled) {
+    background: #ff6b6b;
+    border-color: #ff6b6b;
+    color: #fff;
+  }
 }
 .dash-modal .dash-modal__item-remove:disabled {
   opacity: 0.55;
@@ -3956,6 +4133,7 @@ body.landing-no-scroll { overflow: hidden; }
 .dash-modal .dash-modal__copy {
   display: block;
   width: 100%;
+  overflow-wrap: anywhere;
   text-align: center;
   padding: 14px 16px;
   border-radius: 14px;
@@ -3968,14 +4146,17 @@ body.landing-no-scroll { overflow: hidden; }
   font-family: inherit;
   transition: background 0.2s ease, border-color 0.2s ease;
 }
-.dash-modal .dash-modal__copy:hover {
-  background: rgba(198, 255, 61, 0.16);
-  border-color: rgba(198, 255, 61, 0.45);
+@media (hover: hover) {
+  .dash-modal .dash-modal__copy:hover {
+    background: rgba(198, 255, 61, 0.16);
+    border-color: rgba(198, 255, 61, 0.45);
+  }
 }
 
 .dash-card .dash-modal__copy {
   display: block;
   width: 100%;
+  overflow-wrap: anywhere;
   text-align: center;
   padding: 14px 16px;
   border-radius: 14px;
@@ -3988,9 +4169,11 @@ body.landing-no-scroll { overflow: hidden; }
   font-family: inherit;
   transition: background 0.2s ease, border-color 0.2s ease;
 }
-.dash-card .dash-modal__copy:hover:not(:disabled) {
-  background: rgba(198, 255, 61, 0.16);
-  border-color: rgba(198, 255, 61, 0.45);
+@media (hover: hover) {
+  .dash-card .dash-modal__copy:hover:not(:disabled) {
+    background: rgba(198, 255, 61, 0.16);
+    border-color: rgba(198, 255, 61, 0.45);
+  }
 }
 .dash-card .dash-modal__copy:disabled {
   opacity: 0.5;
@@ -3999,6 +4182,8 @@ body.landing-no-scroll { overflow: hidden; }
 
 .dash-referrals-table-wrap {
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
   margin-bottom: 16px;
 }
 .dash-referrals-table {
@@ -4052,8 +4237,10 @@ body.landing-no-scroll { overflow: hidden; }
   text-underline-offset: 3px;
   cursor: pointer;
 }
-.dash-referrals-more-link:hover {
-  opacity: 0.85;
+@media (hover: hover) {
+  .dash-referrals-more-link:hover {
+    opacity: 0.85;
+  }
 }
 
 /* ---------- Referrals page: 3-step flow ---------- */
@@ -4079,10 +4266,12 @@ body.landing-no-scroll { overflow: hidden; }
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
   transition: border-color .2s ease, transform .15s ease, box-shadow .2s ease;
 }
-.landing-root .dash-referrals-flow__step:hover {
-  border-color: rgba(198, 255, 61, 0.32);
-  transform: translateY(-2px);
-  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.45);
+@media (hover: hover) {
+  .landing-root .dash-referrals-flow__step:hover {
+    border-color: rgba(198, 255, 61, 0.32);
+    transform: translateY(-2px);
+    box-shadow: 0 22px 70px rgba(0, 0, 0, 0.45);
+  }
 }
 .landing-root .dash-referrals-flow__num {
   position: absolute;
@@ -4153,10 +4342,12 @@ body.landing-no-scroll { overflow: hidden; }
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
 }
-.landing-root .dash-referrals-rewards__btn:hover:not(:disabled) {
-  background: rgba(198, 255, 61, 0.16);
-  border-color: rgba(198, 255, 61, 0.45);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .landing-root .dash-referrals-rewards__btn:hover:not(:disabled) {
+    background: rgba(198, 255, 61, 0.16);
+    border-color: rgba(198, 255, 61, 0.45);
+    transform: translateY(-1px);
+  }
 }
 .landing-root .dash-referrals-rewards__btn:disabled {
   opacity: 0.45;
@@ -4416,10 +4607,12 @@ body.landing-no-scroll { overflow: hidden; }
   cursor: pointer;
   transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
-.dash-modal .dash-modal__gallery-nav:hover {
-  background: rgba(198, 255, 61, 0.1);
-  border-color: rgba(198, 255, 61, 0.35);
-  color: var(--dm-accent);
+@media (hover: hover) {
+  .dash-modal .dash-modal__gallery-nav:hover {
+    background: rgba(198, 255, 61, 0.1);
+    border-color: rgba(198, 255, 61, 0.35);
+    color: var(--dm-accent);
+  }
 }
 .dash-modal .dash-modal__gallery-img {
   min-width: 0;
@@ -4454,23 +4647,95 @@ body.landing-no-scroll { overflow: hidden; }
   box-shadow: 0 0 0 3px rgba(198, 255, 61, 0.25);
 }
 
+/* ---------- Touch devices ----------
+   Hover styles above only apply on (hover: hover) devices, so taps never leave
+   a sticky hover state. Touch gets a visible pressed state instead. */
 @media (hover: none) {
-  .landing-root .btn:hover,
-  .landing-root .nav__link:hover,
-  .landing-root .plan:hover,
-  .landing-root .dash-card:hover,
-  .landing-root .dashboard-sidebar__link:hover,
-  .landing-root .dashboard-sidebar__burger:hover,
-  .landing-root .dashboard-sidebar__close:hover,
-  .landing-root .app-action:hover,
-  .landing-root .app-sidebar__link:hover,
-  .landing-root .instructions-platform-card:hover,
-  .landing-root .dash-actions__btn:hover,
-  .landing-root .dash-card__primary:hover,
-  .landing-root .dash-card__footer-btn:hover,
-  .dash-modal .dash-modal-btn:hover,
-  .dash-modal .dash-modal__gallery-nav:hover {
-    transform: none;
+  .landing-root button:not(:disabled):active,
+  .landing-root a:active,
+  .dash-modal button:not(:disabled):active,
+  .dash-modal a:active {
+    opacity: 0.78;
+  }
+}
+
+/* Small text links and icon buttons: grow the tap area to at least 44×44px
+   with an invisible ::after, so nothing moves visually. */
+@media (pointer: coarse) {
+  .landing-root .login-card .form-link button,
+  .landing-root .dash-topbar__password,
+  .landing-root .pay-page__back,
+  .landing-root .doc__back,
+  .landing-root .footer__link,
+  .landing-root .modal__link,
+  .landing-root .dash-card__footer-link,
+  .landing-root .app-progress__link,
+  .landing-root .instructions-inline-link,
+  .landing-root .support2-attachment--file,
+  .landing-root .dash-referrals-pagination button,
+  .dash-referrals-more-link,
+  .dash-modal .dash-modal__link,
+  .dash-modal .dash-modal-btn--back {
+    position: relative;
+  }
+  .landing-root .login-card .form-link button::after,
+  .landing-root .dash-topbar__password::after,
+  .landing-root .pay-page__back::after,
+  .landing-root .doc__back::after,
+  .landing-root .footer__link::after,
+  .landing-root .modal__link::after,
+  .landing-root .dash-card__footer-link::after,
+  .landing-root .app-progress__link::after,
+  .landing-root .instructions-inline-link::after,
+  .landing-root .support2-attachment--file::after,
+  .landing-root .dash-referrals-pagination button::after,
+  .dash-referrals-more-link::after,
+  .dash-modal .dash-modal__link::after,
+  .dash-modal .dash-modal-btn--back::after,
+  .dialog-close::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* ---------- Radix dialogs on phones ----------
+   :where() keeps specificity at zero so per-dialog Tailwind classes such as
+   max-h-[85dvh] still win; dialogs without them get a viewport-sized cap and
+   scroll inside instead of overflowing past the screen edges. */
+:where(.dash-modal, .unsubscribe-dialog) {
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 520px) {
+  .dash-modal {
+    width: calc(100% - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) !important;
+  }
+}
+
+[data-sonner-toast] [data-description],
+[data-sonner-toast] [data-title] {
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-root { scroll-behavior: auto; }
+  .landing-root .dashboard-sidebar,
+  .landing-root .dashboard-sidebar__mobile-title,
+  .landing-root .dashboard-sidebar__mobile-title-chevron,
+  .landing-root .dash-ring__bar {
+    transition: none;
+  }
+  .landing-root .dashboard-sidebar__backdrop,
+  .support2-lightbox {
+    animation: none;
   }
 }
 
@@ -4499,7 +4764,9 @@ body.landing-no-scroll { overflow: hidden; }
   cursor: pointer;
   transition: color .2s ease;
 }
-.password-toggle:hover:not(:disabled) { color: #ffffff; }
+@media (hover: hover) {
+  .password-toggle:hover:not(:disabled) { color: #ffffff; }
+}
 .password-toggle:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 2px rgba(198, 255, 61, 0.55);
@@ -4559,7 +4826,9 @@ body.landing-no-scroll { overflow: hidden; }
   font-weight: 600;
   cursor: pointer;
 }
-.landing-root .dash-topbar__password:hover { text-decoration: underline; }
+@media (hover: hover) {
+  .landing-root .dash-topbar__password:hover { text-decoration: underline; }
+}
 
 .dash-modal .dash-modal__hint {
   font-size: 12px;

@@ -36,6 +36,7 @@ import LandingShell from "@/pages/landing/LandingShell";
 import LandingFooter from "@/pages/landing/LandingFooter";
 
 import { apiGet } from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
 import {
   getVpnAuthEmail,
   getVpnSubscriptionUrl,
@@ -137,38 +138,18 @@ const CopySubscriptionLink = ({ subscriptionUrl }: { subscriptionUrl?: string })
       return;
     }
 
-    const container = btnRef.current;
-    if (!container) return;
-
-    const input = document.createElement("input");
-    input.type = "text";
-    input.value = subscriptionUrl;
-    input.style.position = "absolute";
-    input.style.opacity = "0";
-    input.style.height = "0";
-    input.style.fontSize = "16px";
-    container.appendChild(input);
-    input.focus();
-    input.setSelectionRange(0, input.value.length);
-
-    let ok = false;
-    try {
-      ok = document.execCommand("copy");
-    } catch {
-      ok = false;
-    }
-    container.removeChild(input);
-
-    if (ok) {
-      toast.success("Ссылка скопирована!", {
-        style: { background: "#0a0a0a", color: "#fff", border: "1px solid #22c55e" },
-      });
-    } else {
-      toast.error("Не удалось скопировать. Скопируйте вручную:", {
-        description: subscriptionUrl,
-        duration: 8000,
-      });
-    }
+    void copyText(subscriptionUrl, btnRef.current).then((ok) => {
+      if (ok) {
+        toast.success("Ссылка скопирована!", {
+          style: { background: "#0a0a0a", color: "#fff", border: "1px solid #22c55e" },
+        });
+      } else {
+        toast.error("Не удалось скопировать. Скопируйте вручную:", {
+          description: subscriptionUrl,
+          duration: 8000,
+        });
+      }
+    });
   };
 
   return (
