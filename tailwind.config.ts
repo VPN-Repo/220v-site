@@ -3,6 +3,9 @@ import tailwindcssAnimate from "tailwindcss-animate";
 
 export default {
   darkMode: ["class"],
+  // `hover:` utilities only on devices that really hover, so taps on phones
+  // do not leave sticky hover styles behind. Desktop output is unchanged.
+  future: { hoverOnlyWhenSupported: true },
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   prefix: "",
   theme: {

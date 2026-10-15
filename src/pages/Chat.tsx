@@ -14,6 +14,7 @@ import {
 import { getVpnTalkmeProfileRaw } from "@/lib/vpnStorage";
 import LandingFooter from "@/pages/landing/LandingFooter";
 import LandingShell from "@/pages/landing/LandingShell";
+import { lockDocumentScroll } from "@/lib/scrollLock";
 
 type ChatAttachmentKind = "image" | "video" | "zip" | "file";
 
@@ -138,6 +139,21 @@ function formatMessageTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** How close (px) to the bottom the list must be to keep following new messages. */
+const CHAT_STICK_TO_BOTTOM_THRESHOLD_PX = 96;
+
+/**
+ * True when the messages list is scrolled to (or near) its end. Polling and
+ * keyboard resizes only auto-scroll in that case, so reading older messages
+ * is not interrupted every few seconds.
+ */
+export function isNearBottom(
+  element: Pick<HTMLElement, "scrollTop" | "scrollHeight" | "clientHeight">,
+  threshold = CHAT_STICK_TO_BOTTOM_THRESHOLD_PX,
+): boolean {
+  return element.scrollHeight - element.scrollTop - element.clientHeight <= threshold;
 }
 
 const imageExtensions = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "avif"]);
@@ -373,6 +389,8 @@ const Chat = () => {
   const mountedRef = useRef(true);
   /** Отправленные сообщения, которых ещё нет в ответе Talk-Me. */
   const pendingMessagesRef = useRef<ChatMessage[]>([]);
+  /** Follow new messages only while the user is at the end of the list. */
+  const stickToBottomRef = useRef(true);
 
   const handleAuthError = useCallback(() => {
     setError("Сессия истекла. Войдите снова.");
@@ -382,7 +400,7 @@ const Chat = () => {
   const scrollMessagesToEnd = useCallback(() => {
     const container = messagesContainerRef.current;
     const endEl = messagesEndRef.current;
-    if (!container || !endEl) return;
+    if (!container || !endEl || !stickToBottomRef.current) return;
 
     const { overflowY } = window.getComputedStyle(container);
     if (overflowY === "auto" || overflowY === "scroll") {
@@ -661,12 +679,16 @@ const Chat = () => {
   useEffect(() => {
     if (!lightboxImage) return;
 
+    const unlockScroll = lockDocumentScroll();
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setLightboxImage(null);
     };
 
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      unlockScroll();
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [lightboxImage]);
 
   const clearSelectedFile = () => {
@@ -711,6 +733,7 @@ const Chat = () => {
 
     setDraft("");
     clearSelectedFile();
+    stickToBottomRef.current = true;
     pendingMessagesRef.current = [...pendingMessagesRef.current, optimisticMessage];
     setMessages((prev) => [...prev, optimisticMessage]);
     setSending(true);
@@ -739,7 +762,8 @@ const Chat = () => {
       await syncMessagesAfterSend();
       await refreshMeta();
     } catch (err) {
-      setDraft(text);
+      // The composer stays editable while sending; keep anything typed meanwhile.
+      setDraft((current) => [text, current.trim() ? current : ""].filter(Boolean).join("\n"));
       setSelectedFile(fileToSend);
       pendingMessagesRef.current = pendingMessagesRef.current.filter(
         (message) => message.id !== optimisticMessage.id,
@@ -821,6 +845,9 @@ const Chat = () => {
                   className="support2-chat__messages"
                   data-dashboard-mobile-scroll
                   aria-live="polite"
+                  onScroll={(event) => {
+                    stickToBottomRef.current = isNearBottom(event.currentTarget);
+                  }}
                 >
                   {initialLoading ? (
                     <div className="support2-chat__state">
@@ -883,7 +910,7 @@ const Chat = () => {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*,video/*,.zip"
+                      accept="image/*,video/*,.zip,application/zip"
                       className="support2-chat__file-input"
                       onChange={handleFileChange}
                       disabled={!email || sending}
@@ -908,10 +935,15 @@ const Chat = () => {
                       placeholder="Опишите вопрос..."
                       enterKeyHint="send"
                       rows={1}
-                      disabled={!email || sending}
+                      // Not disabled while sending: disabling the focused field would blur it and
+                      // close the phone keyboard after every message. handleSubmit ignores repeats.
+                      disabled={!email}
+                      aria-busy={sending || undefined}
                       onFocus={() => setComposerFocused(true)}
                       onBlur={() => setComposerFocused(false)}
                       onKeyDown={(event) => {
+                        // Enter that confirms an IME composition must not send the message.
+                        if (event.nativeEvent.isComposing) return;
                         const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
                         if (event.key === "Enter" && (event.metaKey || event.ctrlKey || (coarsePointer && !event.shiftKey))) {
                           event.preventDefault();
@@ -922,6 +954,8 @@ const Chat = () => {
                     <button
                       type="submit"
                       className="support2-chat__send"
+                      // Keep focus (and the phone keyboard) in the composer when tapping send.
+                      onMouseDown={(event) => event.preventDefault()}
                       disabled={!email || (!draft.trim() && !selectedFile) || sending}
                       aria-label="Отправить"
                       title="Отправить"

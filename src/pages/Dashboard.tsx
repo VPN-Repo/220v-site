@@ -26,6 +26,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
 import { useSession } from "@/hooks/useSession";
 import { trafficPurchaseRestriction, useTrafficPurchaseRestriction } from "@/hooks/useTrafficPurchaseRestriction";
 import { isPaidTariff } from "@/lib/tariff";
@@ -632,8 +633,8 @@ const Dashboard = () => {
   };
 
   /**
-   * Копирование в буфер из пользовательского жеста (без async-обёртки — иначе Clipboard API блокируется).
-   * Фолбэк: временный input на кнопке + execCommand (как на странице /instructions).
+   * Копирование в буфер из пользовательского жеста: Clipboard API, фолбэк — временное поле
+   * на кнопке + execCommand (см. `copyText`).
    */
   const handleCopySubscriptionLink = () => {
     const url = resolveSubscriptionUrl();
@@ -642,29 +643,7 @@ const Dashboard = () => {
       return;
     }
 
-    const copyViaExecCommand = () => {
-      const container = copySubscriptionButtonRef.current;
-      if (!container) {
-        toast.error("Не удалось скопировать");
-        return;
-      }
-      const input = document.createElement("input");
-      input.type = "text";
-      input.value = url;
-      input.style.position = "absolute";
-      input.style.opacity = "0";
-      input.style.height = "0";
-      input.style.fontSize = "16px";
-      container.appendChild(input);
-      input.focus();
-      input.setSelectionRange(0, input.value.length);
-      let ok = false;
-      try {
-        ok = document.execCommand("copy");
-      } catch {
-        ok = false;
-      }
-      container.removeChild(input);
+    void copyText(url, copySubscriptionButtonRef.current).then((ok) => {
       if (ok) {
         toast.success("Ссылка скопирована!", {
           style: { background: "#0a0a0a", color: "#fff", border: "1px solid #22c55e" },
@@ -675,22 +654,7 @@ const Dashboard = () => {
           duration: 8000,
         });
       }
-    };
-
-    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(url).then(
-        () => {
-          toast.success("Ссылка скопирована!", {
-            style: { background: "#0a0a0a", color: "#fff", border: "1px solid #22c55e" },
-          });
-        },
-        () => {
-          copyViaExecCommand();
-        },
-      );
-      return;
-    }
-    copyViaExecCommand();
+    });
   };
 
   const formatDate = (dateStr: string) => {
