@@ -28,6 +28,7 @@ import {
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { useSession } from "@/hooks/useSession";
 import { trafficPurchaseRestriction, useTrafficPurchaseRestriction } from "@/hooks/useTrafficPurchaseRestriction";
+import { isPaidTariff } from "@/lib/tariff";
 import {
   clearChatCompatCache,
   consumePendingPromoCode,
@@ -710,12 +711,7 @@ const Dashboard = () => {
   const remainingBytes = Math.max(0, trafficLimitBytes - usedTrafficBytes);
   const tariffLc = (userData?.tariff ?? "").toLowerCase();
   const planLc = (userData?.plan ?? "").toLowerCase();
-  const paidTariffCodes = new Set(["1month", "6month", "12month"]);
-  const paidPlanLabels = ["1 месяц", "6 месяцев", "12 месяцев"];
-  const isPremiumPlan =
-    paidTariffCodes.has(tariffLc) ||
-    planLc === "premium" ||
-    paidPlanLabels.includes(planLc);
+  const isPremiumPlan = isPaidTariff(tariffLc, planLc);
   const isExpired = (userData?.status ?? "").toUpperCase() === "EXPIRED";
   const isTrafficExhausted = hasTrafficLimit && usedTrafficBytes >= trafficLimitBytes;
   const daysLeft = Math.max(0, userData?.daysLeft ?? 0);
