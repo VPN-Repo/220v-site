@@ -23,9 +23,10 @@ export async function acquireOtpCooldown(email, owner, ttlSec = OTP_COOLDOWN_SEC
   return redis.set(otpCooldownKey(email), owner, "EX", ttlSec, "NX");
 }
 
-export async function getOtpCooldownRemainingSec(email) {
-  const ttlSec = await redis.ttl(otpCooldownKey(email));
-  return ttlSec > 0 ? ttlSec : 0;
+// Seconds left on a resend cooldown key; at least 1 (the key may expire between the checks).
+export async function cooldownRemainingSec(key) {
+  const ttlSec = Number(await redis.ttl(key));
+  return ttlSec > 0 ? ttlSec : 1;
 }
 
 /**
@@ -171,7 +172,11 @@ export async function pickOtpMailProvider(sendsKey) {
 /**
  * Counts a successful OTP email send. The window is fixed from the first send:
  * SET NX creates the counter with its TTL, INCR keeps that TTL.
+ *
+ * @returns {Promise<number | null>} which send this is in the window (1 for the first one)
  */
 export async function recordOtpMailSend(sendsKey, windowSec = OTP_PROVIDER_WINDOW_SEC) {
-  await redis.multi().set(sendsKey, "0", "EX", windowSec, "NX").incr(sendsKey).exec();
+  const results = await redis.multi().set(sendsKey, "0", "EX", windowSec, "NX").incr(sendsKey).exec();
+  const sendNumber = Number(results?.[1]?.[1]);
+  return Number.isInteger(sendNumber) && sendNumber > 0 ? sendNumber : null;
 }

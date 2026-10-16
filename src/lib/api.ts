@@ -9,7 +9,7 @@ function getCsrfToken(): string {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
-type ApiResult<T> = { data: T | null; error: Error | null; status: number; retryAfterSec?: number };
+export type ApiResult<T> = { data: T | null; error: Error | null; status: number; retryAfterSec?: number };
 
 function readRetryAfterSec(res: Response, parsed: unknown): number | undefined {
   if (typeof parsed === "object" && parsed !== null && "retryAfterSec" in parsed) {

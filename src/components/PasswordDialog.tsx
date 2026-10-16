@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { apiPost } from "@/lib/api";
 import { formatResendCooldownButtonLabel } from "@/lib/errorMessages";
+import { authErrorMessage, resendNotice } from "@/lib/authMessages";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PasswordVisibilityButton from "@/components/PasswordVisibilityButton";
 import { isValidNewPassword, PASSWORD_REQUIREMENTS, SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/password";
@@ -64,19 +65,21 @@ export default function PasswordDialog({ open, onOpenChange, hasPassword, onChan
     if (!validPassword()) return;
     setLoading(true);
     try {
-      const { data, error, retryAfterSec } = await apiPost<{ ok?: boolean; retryAfterSec?: number }>(
+      const result = await apiPost<{ ok?: boolean; retryAfterSec?: number; sendNumber?: number }>(
         "/auth/password/send-code",
         {},
       );
+      const { data, error, retryAfterSec } = result;
       if (error) {
+        // A 429 holds the resend button for exactly as long as the server refuses a new code.
         if (retryAfterSec) setResendCooldownSec(retryAfterSec);
-        throw error;
+        throw new Error(authErrorMessage(result, "Не удалось отправить код"));
       }
       if (!data?.ok) throw new Error("Не удалось отправить код");
       setCode("");
       setSent(true);
       setResendCooldownSec(retryAfterSec ?? data.retryAfterSec ?? 60);
-      toast.success("Код отправлен на ваш email");
+      toast.success(resendNotice(data.sendNumber) || "Код отправлен на ваш email");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Не удалось отправить код");
     } finally {
@@ -92,8 +95,9 @@ export default function PasswordDialog({ open, onOpenChange, hasPassword, onChan
     }
     setLoading(true);
     try {
-      const { data, error } = await apiPost<{ ok?: boolean }>("/auth/password/change", { code, newPassword });
-      if (error) throw error;
+      const result = await apiPost<{ ok?: boolean }>("/auth/password/change", { code, newPassword });
+      const { data, error } = result;
+      if (error) throw new Error(authErrorMessage(result, "Не удалось изменить пароль"));
       if (!data?.ok) throw new Error("Не удалось изменить пароль");
       toast.success("Пароль сохранён. Другие сеансы завершены");
       onChanged();

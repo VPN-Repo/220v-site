@@ -4,6 +4,13 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost } from "@/lib/api";
 import { formatResendCooldownButtonLabel } from "@/lib/errorMessages";
+import {
+  authErrorMessage,
+  codeAttemptsFrom,
+  codeAttemptsHint,
+  resendNotice,
+  type CodeAttempts,
+} from "@/lib/authMessages";
 import { useSession } from "@/hooks/useSession";
 import {
   consumeVpnPendingRedirect,
@@ -117,6 +124,8 @@ const Index = () => {
   const [supportOpen, setSupportOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resendCooldownSec, setResendCooldownSec] = useState(0);
+  // Attempt counters from the last wrong code; cleared when a new code is sent.
+  const [codeAttempts, setCodeAttempts] = useState<CodeAttempts | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
   // На мобильных устройствах между тапом и обновлением React-state (disabled
   // на кнопке) может пройти кадр — этого хватает, чтобы успеть зарегистрировать
@@ -209,6 +218,7 @@ const Index = () => {
     resetPasswordFields();
     setHasPassword(false);
     setResendCooldownSec(0);
+    setCodeAttempts(null);
     setLoginOpen(true);
   };
 
@@ -248,26 +258,29 @@ const Index = () => {
         }
       }
 
-      const { data, error, retryAfterSec } = await apiPost<{ ok?: boolean; error?: string; retryAfterSec?: number }>(
+      const result = await apiPost<{ ok?: boolean; error?: string; retryAfterSec?: number; sendNumber?: number }>(
         "/auth/send-code",
         sendCodeBody,
       );
+      const { data, error, retryAfterSec } = result;
 
       if (error) {
+        // A 429 holds the resend button for exactly as long as the server refuses a new code.
         if (retryAfterSec) {
           setResendCooldownSec(retryAfterSec);
         }
-        toast({ title: "Ошибка", description: error.message, variant: "destructive" });
+        toast({ title: "Ошибка", description: authErrorMessage(result, "Не удалось отправить код"), variant: "destructive" });
         return;
       }
 
       if (data?.ok) {
         setCode("");
+        setCodeAttempts(null);
         setLoginStep("verify");
         setResendCooldownSec(retryAfterSec ?? data.retryAfterSec ?? 60);
         toast({
           title: "✅ Код отправлен!",
-          description: `Код подтверждения отправлен на ${normalizedEmail}`,
+          description: resendNotice(data.sendNumber) || `Код подтверждения отправлен на ${normalizedEmail}`,
           className: "bg-[#0a0a0a] text-white border-green-500 shadow-[inset_4px_0_0_0_#22c55e]",
         });
       } else {
@@ -330,11 +343,12 @@ const Index = () => {
 
     setLoading(true);
     try {
-      const { data, error } = await apiPost<{ user?: unknown; error?: string }>("/auth/login-password", {
+      const result = await apiPost<{ user?: unknown; error?: string }>("/auth/login-password", {
         email: normalizedEmail,
         password,
       });
-      if (error) throw error;
+      const { data, error } = result;
+      if (error) throw new Error(authErrorMessage(result, "Не удалось завершить вход"));
       if (!data?.user) throw new Error(data?.error || "Не удалось завершить вход");
       setPassword("");
       await completeLogin();
@@ -383,9 +397,14 @@ const Index = () => {
         }
       }
 
-      const { data, error } = await apiPost<{ user?: unknown; error?: string }>("/auth/verify", verifyBody);
+      const result = await apiPost<{ user?: unknown; error?: string }>("/auth/verify", verifyBody);
+      const { data, error } = result;
 
-      if (error) throw error;
+      if (error) {
+        // A wrong code comes with "Осталось попыток: X из 5"; any other answer drops the counter.
+        setCodeAttempts(result.status === 400 ? codeAttemptsFrom(result) : null);
+        throw new Error(authErrorMessage(result, "Ошибка проверки кода"));
+      }
 
       if (data?.user) {
         resetPasswordFields();
@@ -851,6 +870,11 @@ const Index = () => {
                 </InputOTPGroup>
               </InputOTP>
             </div>
+            {codeAttempts ? (
+              <p className="login-attempts-hint" role="status">
+                {codeAttemptsHint(codeAttempts)}
+              </p>
+            ) : null}
             <div className="form-actions">
               <button
                 type="button"

@@ -1,13 +1,17 @@
 const FETCH_TIMEOUT_MS = 8000;
 
+/** "45 сек." below two minutes, otherwise whole minutes rounded up: "15 мин.". */
+export function formatWaitTime(seconds: number): string {
+  const sec = Math.max(1, Math.ceil(Number(seconds) || 0));
+  return sec >= 120 ? `${Math.ceil(sec / 60)} мин.` : `${sec} сек.`;
+}
+
 export function formatResendCooldownMessage(seconds: number): string {
-  const sec = Math.max(1, Math.ceil(seconds));
-  return `Подождите ${sec} сек. перед повторной отправкой кода`;
+  return `Подождите ${formatWaitTime(seconds)} перед повторной отправкой кода`;
 }
 
 export function formatResendCooldownButtonLabel(seconds: number): string {
-  const sec = Math.max(1, Math.ceil(seconds));
-  return `Повторная отправка через ${sec} сек.`;
+  return `Повторная отправка через ${formatWaitTime(seconds)}`;
 }
 
 function isTimeoutError(err: unknown): boolean {

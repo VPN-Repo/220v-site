@@ -4811,6 +4811,13 @@ body.landing-no-scroll { overflow: hidden; }
 .landing-root .login-card .login-support-hint {
   margin-top: 18px;
 }
+.landing-root .login-card .login-attempts-hint {
+  margin: -4px 0 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: center;
+}
 
 .landing-root .dash-topbar__password {
   margin-top: 8px;

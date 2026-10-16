@@ -3,12 +3,38 @@ import { RedisStore } from "rate-limit-redis";
 import { SESSION_COOKIE } from "../config.mjs";
 import { redis } from "../redis.mjs";
 import { methodSchema, sendCodeSchema } from "../auth/schemas.mjs";
+import { formatRateLimitMessage } from "./userMessages.mjs";
+
+// Seconds until the limiter window resets; at least 1 so clients never retry immediately.
+export function rateLimitRetryAfterSec(req, windowMs, now = Date.now()) {
+  const resetTime = req.rateLimit?.resetTime;
+  const resetMs = resetTime instanceof Date ? resetTime.getTime() : now + windowMs;
+  return Math.max(1, Math.ceil((resetMs - now) / 1000));
+}
+
+// Every limiter answers with its own message plus the exact wait, so the user knows when to retry.
+// The Retry-After header is still set by express-rate-limit before the handler runs.
+function rateLimitHandler(windowMs) {
+  return async (req, res, _next, options) => {
+    const message = typeof options.message === "function" ? await options.message(req, res) : options.message;
+    const body = message && typeof message === "object" ? message : { error: String(message) };
+    if (res.writableEnded) return;
+    const retryAfterSec = rateLimitRetryAfterSec(req, windowMs);
+    res.status(options.statusCode).json({
+      ...body,
+      error: formatRateLimitMessage(body.error, retryAfterSec),
+      retryAfterSec,
+      code: "rate_limited",
+    });
+  };
+}
 
 function makeRateLimit(opts) {
   const base = {
     ...opts,
     standardHeaders: true,
     legacyHeaders: false,
+    handler: rateLimitHandler(opts.windowMs),
   };
   if (process.env.NODE_ENV === "test") {
     return rateLimit(base);

@@ -14,9 +14,26 @@ export function isTimeoutError(err) {
   );
 }
 
+/** "45 сек." below two minutes, otherwise whole minutes rounded up: "15 мин.". */
+export function formatWaitTime(seconds) {
+  const sec = Math.max(1, Math.ceil(Number(seconds) || 0));
+  return sec >= 120 ? `${Math.ceil(sec / 60)} мин.` : `${sec} сек.`;
+}
+
 export function formatOtpResendCooldownMessage(retryAfterSec) {
-  const sec = Math.max(1, Math.ceil(retryAfterSec));
-  return `Подождите ${sec} сек. перед повторной отправкой кода`;
+  return `Подождите ${formatWaitTime(retryAfterSec)} перед повторной отправкой кода`;
+}
+
+/**
+ * A limiter message with the exact wait: "Слишком много попыток входа. Попробуйте позже."
+ * becomes "Слишком много попыток входа. Повторите через 14 мин.".
+ */
+export function formatRateLimitMessage(message, retryAfterSec) {
+  const base = String(message || "Слишком много запросов.")
+    .replace(/\s*Попробуйте позже\.?\s*$/, "")
+    .trim();
+  const sentence = /[.!?]$/.test(base) ? base : `${base}.`;
+  return `${sentence} Повторите через ${formatWaitTime(retryAfterSec)}`;
 }
 
 export function formatTimeoutMessage(timeoutMs = FETCH_TIMEOUT_MS, context) {

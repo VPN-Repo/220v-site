@@ -1,9 +1,8 @@
 import { Router } from "express";
 import { randomBytes } from "node:crypto";
-import { ALLOWED_EMAIL_DOMAINS, OTP_COOLDOWN_SEC, OTP_TTL_SEC, SESSION_TTL_SEC } from "../config.mjs";
-import { clientError, serverError } from "../http/errors.mjs";
+import { ALLOWED_EMAIL_DOMAINS, OTP_COOLDOWN_SEC, OTP_MAX_TRIES, OTP_TTL_SEC, SESSION_TTL_SEC } from "../config.mjs";
+import { clientError, otpCooldownError, serverError } from "../http/errors.mjs";
 import {
-  formatOtpResendCooldownMessage,
   isTimeoutError,
   publicMessageFromErr,
   timeoutStatusCode,
@@ -36,9 +35,9 @@ import {
 import {
   acquireOtpCooldown,
   clearOtpAndCooldown,
+  cooldownRemainingSec,
   deleteOtp,
   getCooldownDebugSnapshot,
-  getOtpCooldownRemainingSec,
   getOtpDebugSnapshot,
   pickOtpMailProvider,
   putOtp,
@@ -64,7 +63,13 @@ import {
   saveLoginSession,
   verifyPassword,
 } from "./password.mjs";
-import { otpMailSendsKey, passwordCooldownKey, passwordMailSendsKey, passwordOtpKey } from "./keys.mjs";
+import {
+  otpCooldownKey,
+  otpMailSendsKey,
+  passwordCooldownKey,
+  passwordMailSendsKey,
+  passwordOtpKey,
+} from "./keys.mjs";
 import { listDailyUnfinishedEmails, recordDailyAuth } from "./dailyStats.mjs";
 import { recordReferralEvent } from "../referrals/events.mjs";
 import {
@@ -93,13 +98,18 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
   };
   // Counted only after a provider accepted the email; a counter failure must
   // not turn an already delivered code into an error response.
+  // Returns which send this is in the window, or null when it is unknown.
   const countMailSend = async (req, sendsKey) => {
     try {
-      await recordOtpMailSend(sendsKey);
+      return await recordOtpMailSend(sendsKey);
     } catch (err) {
       req.log.warn({ err }, "otp mail send counter update failed");
+      return null;
     }
   };
+  // The client says "code sent again (N-th send)" from sendNumber.
+  const sendCodeOk = (sendNumber) =>
+    sendNumber ? { ok: true, retryAfterSec: OTP_COOLDOWN_SEC, sendNumber } : { ok: true, retryAfterSec: OTP_COOLDOWN_SEC };
 
   router.get("/api/admin/redis-auth", requireAdminToken, async (req, res) => {
     try {
@@ -249,10 +259,7 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
         const cooldownResult = await acquireOtpCooldown(email, owner, OTP_COOLDOWN_SEC);
         if (cooldownResult !== "OK") {
           await recordAuthEvent("send_code_cooldown", req, { email, status: "rejected" });
-          const retryAfterSec = await getOtpCooldownRemainingSec(email);
-          const message = formatOtpResendCooldownMessage(retryAfterSec || OTP_COOLDOWN_SEC);
-          res.set("Retry-After", String(retryAfterSec || OTP_COOLDOWN_SEC));
-          return clientError(res, 429, message, { retryAfterSec: retryAfterSec || OTP_COOLDOWN_SEC });
+          return otpCooldownError(res, await cooldownRemainingSec(otpCooldownKey(email)));
         }
 
         const code = generateOtpCode();
@@ -294,7 +301,7 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
           return res.status(502).json({ error: "Не удалось отправить код" });
         }
 
-        await countMailSend(req, sendsKey);
+        const sendNumber = await countMailSend(req, sendsKey);
         req.log.info(
           {
             emailHash: emailHash(email),
@@ -321,7 +328,7 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
           });
         }
 
-        return res.json({ ok: true, retryAfterSec: OTP_COOLDOWN_SEC });
+        return res.json(sendCodeOk(sendNumber));
       } catch (err) {
         return serverError(res, req, err);
       }
@@ -386,6 +393,16 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
           too_many_tries: "Слишком много попыток. Запросите новый код.",
           bad_code: "Неверный код",
         };
+        if (otpResult.reason === "bad_code" && otpResult.tries) {
+          const attemptsLeft = Math.max(0, OTP_MAX_TRIES - otpResult.tries);
+          // The attempt number and how many are left, so the user knows when the code burns out.
+          return clientError(
+            res,
+            otpResult.status,
+            `Неверный код. Осталось попыток: ${attemptsLeft} из ${OTP_MAX_TRIES}`,
+            { attempt: otpResult.tries, attemptsLeft, maxAttempts: OTP_MAX_TRIES },
+          );
+        }
         return clientError(res, otpResult.status, messages[otpResult.reason] || "Неверный код");
       }
 
@@ -519,10 +536,7 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
         const owner = base64url(randomBytes(16));
         const cooldown = passwordCooldownKey(sid);
         if ((await redis.set(cooldown, owner, "EX", OTP_COOLDOWN_SEC, "NX")) !== "OK") {
-          const ttlSec = await redis.ttl(cooldown);
-          const retryAfterSec = ttlSec > 0 ? ttlSec : OTP_COOLDOWN_SEC;
-          res.set("Retry-After", String(retryAfterSec));
-          return clientError(res, 429, formatOtpResendCooldownMessage(retryAfterSec), { retryAfterSec });
+          return otpCooldownError(res, await cooldownRemainingSec(cooldown));
         }
 
         const code = generateOtpCode();
@@ -564,7 +578,7 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
           return res.status(502).json({ error: "Не удалось отправить код" });
         }
 
-        await countMailSend(req, sendsKey);
+        const sendNumber = await countMailSend(req, sendsKey);
         req.log.info(
           {
             emailHash: emailHash(email),
@@ -581,7 +595,7 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
           provider: mailResult.provider,
           failover: mailResult.failover,
         });
-        return res.json({ ok: true, retryAfterSec: OTP_COOLDOWN_SEC });
+        return res.json(sendCodeOk(sendNumber));
       } catch (err) {
         return serverError(res, req, err);
       }
