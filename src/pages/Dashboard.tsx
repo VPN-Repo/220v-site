@@ -26,8 +26,17 @@ import {
   KeyRound,
 } from "lucide-react";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
 import { useSession } from "@/hooks/useSession";
 import { trafficPurchaseRestriction, useTrafficPurchaseRestriction } from "@/hooks/useTrafficPurchaseRestriction";
+import { isPaidTariff } from "@/lib/tariff";
+import {
+  lteTrafficExplainer,
+  renewInsteadWarningText,
+  shouldWarnRenewInstead,
+  subscriptionEndLabel,
+  subscriptionMsLeft,
+} from "@/lib/lteTraffic";
 import {
   clearChatCompatCache,
   consumePendingPromoCode,
@@ -211,6 +220,7 @@ const Dashboard = () => {
   const [paymentLoading, setPaymentLoading] = useState<number | null>(null);
   const [trafficBuyOpen, setTrafficBuyOpen] = useState(false);
   const [trafficPaymentStep, setTrafficPaymentStep] = useState<{ gb: number; price: number } | null>(null);
+  const [renewWarningDismissed, setRenewWarningDismissed] = useState(false);
   const [otherMenuOpen, setOtherMenuOpen] = useState(false);
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoApplying, setPromoApplying] = useState(false);
@@ -478,6 +488,7 @@ const Dashboard = () => {
       stripAnd(() => {
         setTrafficBuyOpen(true);
         setTrafficPaymentStep(null);
+        setRenewWarningDismissed(false);
       });
       return;
     }
@@ -631,8 +642,8 @@ const Dashboard = () => {
   };
 
   /**
-   * Копирование в буфер из пользовательского жеста (без async-обёртки — иначе Clipboard API блокируется).
-   * Фолбэк: временный input на кнопке + execCommand (как на странице /instructions).
+   * Копирование в буфер из пользовательского жеста: Clipboard API, фолбэк — временное поле
+   * на кнопке + execCommand (см. `copyText`).
    */
   const handleCopySubscriptionLink = () => {
     const url = resolveSubscriptionUrl();
@@ -641,29 +652,7 @@ const Dashboard = () => {
       return;
     }
 
-    const copyViaExecCommand = () => {
-      const container = copySubscriptionButtonRef.current;
-      if (!container) {
-        toast.error("Не удалось скопировать");
-        return;
-      }
-      const input = document.createElement("input");
-      input.type = "text";
-      input.value = url;
-      input.style.position = "absolute";
-      input.style.opacity = "0";
-      input.style.height = "0";
-      input.style.fontSize = "16px";
-      container.appendChild(input);
-      input.focus();
-      input.setSelectionRange(0, input.value.length);
-      let ok = false;
-      try {
-        ok = document.execCommand("copy");
-      } catch {
-        ok = false;
-      }
-      container.removeChild(input);
+    void copyText(url, copySubscriptionButtonRef.current).then((ok) => {
       if (ok) {
         toast.success("Ссылка скопирована!", {
           style: { background: "#0a0a0a", color: "#fff", border: "1px solid #22c55e" },
@@ -674,22 +663,7 @@ const Dashboard = () => {
           duration: 8000,
         });
       }
-    };
-
-    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(url).then(
-        () => {
-          toast.success("Ссылка скопирована!", {
-            style: { background: "#0a0a0a", color: "#fff", border: "1px solid #22c55e" },
-          });
-        },
-        () => {
-          copyViaExecCommand();
-        },
-      );
-      return;
-    }
-    copyViaExecCommand();
+    });
   };
 
   const formatDate = (dateStr: string) => {
@@ -710,14 +684,13 @@ const Dashboard = () => {
   const remainingBytes = Math.max(0, trafficLimitBytes - usedTrafficBytes);
   const tariffLc = (userData?.tariff ?? "").toLowerCase();
   const planLc = (userData?.plan ?? "").toLowerCase();
-  const paidTariffCodes = new Set(["1month", "6month", "12month"]);
-  const paidPlanLabels = ["1 месяц", "6 месяцев", "12 месяцев"];
-  const isPremiumPlan =
-    paidTariffCodes.has(tariffLc) ||
-    planLc === "premium" ||
-    paidPlanLabels.includes(planLc);
+  const isPremiumPlan = isPaidTariff(tariffLc, planLc);
   const isExpired = (userData?.status ?? "").toUpperCase() === "EXPIRED";
   const isTrafficExhausted = hasTrafficLimit && usedTrafficBytes >= trafficLimitBytes;
+  const subscriptionMsLeftNow = subscriptionMsLeft(userData);
+  const subscriptionEnd = subscriptionEndLabel(userData);
+  const showRenewInsteadWarning =
+    !trafficPaymentStep && !renewWarningDismissed && shouldWarnRenewInstead(subscriptionMsLeftNow, trafficRestriction);
   const daysLeft = Math.max(0, userData?.daysLeft ?? 0);
   const usedDays = Math.max(0, userData?.usedDays ?? 0);
   const totalDays = usedDays + daysLeft;
@@ -750,7 +723,7 @@ const Dashboard = () => {
       ? ([
           {
             key: "traffic",
-            label: "Купить трафик",
+            label: "Докупить LTE-трафик",
             icon: Gauge,
             onClick: () => navigate("/traffic"),
             match: "/traffic",
@@ -1051,7 +1024,7 @@ const Dashboard = () => {
                     <Gauge className="h-5 w-5" />
                   </div>
                   <div className="dash-card__head-text">
-                    <div className="dash-card__title">Трафик</div>
+                    <div className="dash-card__title">LTE-трафик</div>
                     <div className="dash-card__desc">
                       {hasTrafficLimit ? "Остаток на LTE-серверах" : "Безлимит на всех серверах"}
                     </div>
@@ -1099,7 +1072,7 @@ const Dashboard = () => {
                       onClick={() => navigate("/traffic")}
                     >
                       <Gauge className="h-4 w-4" aria-hidden="true" />
-                      Докупить
+                      Докупить LTE-трафик
                     </button>
                   ) : null}
                 </div>
@@ -1214,7 +1187,7 @@ const Dashboard = () => {
       <Dialog open={trafficInfoOpen} onOpenChange={setTrafficInfoOpen}>
         <DialogContent className="dash-modal sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Учёт трафика</DialogTitle>
+            <DialogTitle>Учёт LTE-трафика</DialogTitle>
             <DialogDescription>
               Платно по трафику — только на LTE-серверах; на остальных площадках он не ограничен.
             </DialogDescription>
@@ -1227,26 +1200,47 @@ const Dashboard = () => {
         open={trafficBuyOpen}
         onOpenChange={(open) => {
           setTrafficBuyOpen(open);
-          if (!open) setTrafficPaymentStep(null);
+          if (!open) {
+            setTrafficPaymentStep(null);
+            setRenewWarningDismissed(false);
+          }
         }}
       >
         <DialogContent className="dash-modal sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>{trafficPaymentStep ? "Выберите способ оплаты" : "Купить трафик"}</DialogTitle>
+            <DialogTitle>
+              {trafficRestriction
+                ? "Докупка LTE-трафика недоступна"
+                : trafficPaymentStep
+                  ? "Выберите способ оплаты"
+                  : "Докупка LTE-трафика"}
+            </DialogTitle>
             <DialogDescription>
-              {trafficPaymentStep
-                ? `${trafficPaymentStep.gb} ГБ — ${trafficPaymentStep.price} ₽`
-                : "Выберите пакет трафика"}
+              {trafficRestriction ??
+                (trafficPaymentStep ? "Докупка LTE-трафика" : lteTrafficExplainer(subscriptionEnd))}
             </DialogDescription>
           </DialogHeader>
           <div className="dash-modal__stack">
-            {trafficRestriction ? (
-              <>
-                <p role="status">{trafficRestriction}</p>
-                <button type="button" className="dash-modal-btn dash-modal-btn--ghost" onClick={() => navigate("/tariff")}>
-                  К тарифам
-                </button>
-              </>
+            {showRenewInsteadWarning ? (
+              <div className="lte-notice" role="alert">
+                <p className="lte-notice__text">{renewInsteadWarningText(subscriptionMsLeftNow, subscriptionEnd)}</p>
+                <div className="lte-notice__actions">
+                  <button
+                    type="button"
+                    className="dash-modal-btn dash-modal-btn--primary"
+                    onClick={() => navigate("/tariff")}
+                  >
+                    Продлить подписку
+                  </button>
+                  <button type="button" className="lte-notice__link" onClick={() => setRenewWarningDismissed(true)}>
+                    Всё равно докупить трафик
+                  </button>
+                </div>
+              </div>
+            ) : trafficRestriction ? (
+              <button type="button" className="dash-modal-btn dash-modal-btn--ghost" onClick={() => navigate("/tariff")}>
+                К тарифам
+              </button>
             ) : !trafficPaymentStep ? (
               [
                 { gb: 20, price: productPriceByKey.get("traffic_20gb") ?? null },
@@ -1264,7 +1258,7 @@ const Dashboard = () => {
                     setTrafficPaymentStep({ gb: opt.gb, price: opt.price });
                   }}
                 >
-                  <span>{opt.gb} ГБ</span>
+                  <span>+{opt.gb} ГБ LTE</span>
                   <span className="dash-modal-btn__price">{opt.price ?? "—"} ₽</span>
                 </button>
               ))
@@ -1277,6 +1271,16 @@ const Dashboard = () => {
                 >
                   ← Назад
                 </button>
+                <div className="lte-summary" data-testid="traffic-purchase-summary">
+                  <p className="lte-summary__text">
+                    Вы покупаете: <strong>+{trafficPaymentStep.gb} ГБ LTE-трафика</strong> ·{" "}
+                    <strong>{trafficPaymentStep.price.toLocaleString("ru-RU")} ₽</strong>. Действует до {subscriptionEnd}.
+                    Срок подписки не продлевается.
+                  </p>
+                  <button type="button" className="lte-summary__link" onClick={() => navigate("/tariff")}>
+                    Мне нужно продлить подписку →
+                  </button>
+                </div>
                 {paymentMethods.map((method) => (
                   <button
                     key={method.id}

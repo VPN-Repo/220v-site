@@ -13,6 +13,7 @@ import {
   X as CloseIcon,
 } from "lucide-react";
 import logo220v from "@/assets/logo-220v.webp";
+import { lockDocumentScroll } from "@/lib/scrollLock";
 
 type IconType = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -81,17 +82,28 @@ export const DashboardSidebar = ({
 
   useEffect(() => {
     if (!open) return;
-    const { body } = document;
-    const prev = body.style.overflow;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
-    body.style.overflow = "hidden";
+    const unlockScroll = lockDocumentScroll();
     document.addEventListener("keydown", handleKeyDown);
     return () => {
-      body.style.overflow = prev;
+      unlockScroll();
       document.removeEventListener("keydown", handleKeyDown);
     };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || typeof window.matchMedia !== "function") return;
+    // The drawer only exists below 961px; close it (and release the scroll lock)
+    // when a rotation or resize switches to the static desktop sidebar.
+    const desktop = window.matchMedia("(min-width: 961px)");
+    const closeOnDesktop = () => {
+      if (desktop.matches) setOpen(false);
+    };
+    closeOnDesktop();
+    desktop.addEventListener?.("change", closeOnDesktop);
+    return () => desktop.removeEventListener?.("change", closeOnDesktop);
   }, [open]);
 
   useEffect(() => {

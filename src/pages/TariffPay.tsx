@@ -9,6 +9,7 @@ import DashboardSidebar from "@/components/DashboardSidebar";
 import { useDashboardSidebarItems } from "@/hooks/useDashboardSidebarItems";
 import LandingShell from "@/pages/landing/LandingShell";
 import LandingFooter from "@/pages/landing/LandingFooter";
+import { isActivePaidSubscription, subscriptionMsLeft } from "@/lib/lteTraffic";
 
 type BillingMeta = {
   payments?: BillingPaymentMethod[];
@@ -46,6 +47,7 @@ const TariffPay = () => {
     userUuid,
     userLoading,
     userError,
+    user,
   } = useDashboardSidebarItems();
 
   const [billingMeta, setBillingMeta] = useState<BillingMeta | null>(null);
@@ -132,6 +134,7 @@ const TariffPay = () => {
 
   const loading = userLoading || billingLoading;
   const error = userError ?? billingError;
+  const isRenewal = !userLoading && !userError && isActivePaidSubscription(user, subscriptionMsLeft(user));
 
   return (
     <LandingShell className="landing-root--with-sidebar">
@@ -141,12 +144,12 @@ const TariffPay = () => {
         <section className="price-page">
           <div className="container">
             <div className="price-page__head">
-              <h1 className="price-page__title">Оплата тарифа</h1>
+              <h1 className="price-page__title">{isRenewal ? "Продление подписки" : "Оплата тарифа"}</h1>
               <p className="price-page__subtitle">
                 {productKey
                   ? `Подписка на ${MONTHS_LABEL[months]}${
                       price != null ? ` — ${price.toLocaleString("ru-RU")} ₽` : ""
-                    }`
+                    }${isRenewal ? `. Что вы получите: +${months} мес. доступа` : ""}`
                   : "Тариф не выбран"}
               </p>
             </div>

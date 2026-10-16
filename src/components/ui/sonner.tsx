@@ -10,6 +10,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
+      // Phones: keep toasts clear of the notch and the home indicator / gesture bar.
+      mobileOffset={{
+        top: "max(16px, calc(env(safe-area-inset-top) + 8px))",
+        bottom: "max(16px, calc(env(safe-area-inset-bottom) + 8px))",
+      }}
       toastOptions={{
         classNames: {
           toast:

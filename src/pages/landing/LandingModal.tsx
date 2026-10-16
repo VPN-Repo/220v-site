@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 
+import { lockDocumentScroll } from "@/lib/scrollLock";
+
 type LandingModalProps = {
   open: boolean;
   onClose: () => void;
@@ -20,9 +22,8 @@ export const LandingModal = ({ open, onClose, title, subtitle, wide, children }:
 
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
+    const unlockScroll = lockDocumentScroll();
     const prevActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onCloseRef.current();
@@ -53,7 +54,7 @@ export const LandingModal = ({ open, onClose, title, subtitle, wide, children }:
       firstFocusable?.focus();
     });
     return () => {
-      document.body.style.overflow = prev;
+      unlockScroll();
       document.removeEventListener("keydown", onKey);
       prevActiveElement?.focus();
     };
