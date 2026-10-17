@@ -174,3 +174,13 @@ export const refClickIpLimiter = makeRateLimit({
   prefix: "v220:rl:refclick:ip:",
   message: { error: "Слишком много переходов по ссылке. Попробуйте позже." },
 });
+
+// Обновление ссылки подключения ломает подключение на всех устройствах, поэтому строго: 3 раза в час на аккаунт.
+// Лимитер стоит после requireSession, ключ — UUID пользователя из сессии.
+export const subscriptionRevokeUserLimiter = makeRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  prefix: "v220:rl:subrevoke:user:",
+  keyGenerator: (req) => req.session?.userUuid || req.ip,
+  message: { error: "Ссылку подключения можно обновлять не чаще 3 раз в час. Попробуйте позже." },
+});

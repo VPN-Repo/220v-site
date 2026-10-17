@@ -52,7 +52,7 @@ const Price = () => (
               <ul className="plan__features" role="list">
                 <li>Все локации</li>
                 <li>Безлимитный трафик*</li>
-                <li>Поддержка 24/7</li>
+                <li>Поддержка ежедневно с 05:00 до 01:00 (МСК)</li>
               </ul>
               <TariffSelectButton months={1} className="btn btn--ghost btn--wide plan__btn" />
             </div>
@@ -70,7 +70,7 @@ const Price = () => (
               <ul className="plan__features" role="list">
                 <li>Все локации</li>
                 <li>Безлимитный трафик*</li>
-                <li>Поддержка 24/7</li>
+                <li>Поддержка ежедневно с 05:00 до 01:00 (МСК)</li>
                 <li>Экономия 15%</li>
               </ul>
               <TariffSelectButton months={6} className="btn btn--primary btn--wide plan__btn" />

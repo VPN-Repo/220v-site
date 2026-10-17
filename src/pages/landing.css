@@ -1857,6 +1857,15 @@ body.landing-no-scroll { overflow: hidden; }
   font-size: 13px;
   font-weight: 700;
 }
+.landing-root .support2-chat__hours {
+  position: relative;
+  z-index: 1;
+  margin: -6px 0 14px;
+  color: var(--muted-2);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
 .landing-root .support2-chat__error {
   position: relative;
   z-index: 1;
@@ -3132,6 +3141,7 @@ body.landing-no-scroll { overflow: hidden; }
 /* Short landscape phones with the keyboard up: give the space to messages. */
 @media (max-width: 960px) and (max-height: 500px) {
   .landing-root--chat.landing-root--chat-composer-focused .support2-chat__header,
+  .landing-root--chat.landing-root--chat-composer-focused .support2-chat__hours,
   .landing-root--chat.landing-root--chat-composer-focused .support-announcement--page-start {
     display: none;
   }

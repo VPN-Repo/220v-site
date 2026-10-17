@@ -11,7 +11,12 @@ import { redis } from "./redis.mjs";
 import { clientError, serverError } from "./http/errors.mjs";
 import { fetchWithTimeout } from "./http/fetchWithTimeout.mjs";
 import { isTimeoutError, publicMessageFromErr, timeoutStatusCode } from "./http/userMessages.mjs";
-import { checkoutSessionLimiter, emailUnsubscribeIpLimiter, refClickIpLimiter } from "./http/rateLimit.mjs";
+import {
+  checkoutSessionLimiter,
+  emailUnsubscribeIpLimiter,
+  refClickIpLimiter,
+  subscriptionRevokeUserLimiter,
+} from "./http/rateLimit.mjs";
 import { recordReferralEvent, queryReferralEvents } from "./referrals/events.mjs";
 import {
   buildReferralRiskForReferrer,
@@ -1820,6 +1825,96 @@ app.delete("/api/me/devices/:hwid", requireSession, async (req, res) => {
     return serverError(res, req, err);
   }
 });
+
+const REVOKE_FAILED_MESSAGE =
+  "Не удалось обновить ссылку подключения. Попробуйте ещё раз через пару минут или напишите в поддержку.";
+const REVOKE_UNAVAILABLE_MESSAGE = "Обновление ссылки подключения временно недоступно. Напишите в поддержку.";
+const REVOKE_NOT_FOUND_MESSAGE = "Подписка не найдена. Обновите страницу или напишите в поддержку.";
+const REVOKE_PROFILE_STALE_MESSAGE =
+  "Ссылка обновлена, но новую ссылку не удалось загрузить. Обновите страницу, чтобы её увидеть.";
+
+/**
+ * RMW POST /v1/users/{uuid}/revoke → Remnawave revoke: выпускается новая ссылка подписки,
+ * старая перестаёт работать. HWID-устройства RMW при этом не трогает.
+ */
+async function revokeRmwSubscription(uuid) {
+  const rmwUrl = rmwBaseUrl();
+  const rmwKey = rmwApiKey();
+  if (!rmwUrl || !rmwKey) {
+    const err = new Error("RMW not configured");
+    err.status = 503;
+    throw err;
+  }
+  const r = await fetchWithTimeout(`${rmwUrl}/v1/users/${encodeURIComponent(uuid)}/revoke`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Api-Key": rmwKey,
+    },
+    body: "{}",
+  });
+  if (!r.ok) {
+    const err = new Error(`RMW revoke failed (${r.status})`);
+    err.status = r.status;
+    throw err;
+  }
+}
+
+app.post(
+  "/api/me/subscription/revoke",
+  requireSession,
+  subscriptionRevokeUserLimiter,
+  async (req, res) => {
+    let userUuid;
+    try {
+      userUuid = assertValidUuid(req.session.userUuid);
+    } catch {
+      return clientError(res, 400, REVOKE_NOT_FOUND_MESSAGE);
+    }
+
+    try {
+      await revokeRmwSubscription(userUuid);
+    } catch (err) {
+      req.log.warn({ err, status: err?.status }, "RMW subscription revoke failed");
+      if (isTimeoutError(err)) {
+        return clientError(
+          res,
+          timeoutStatusCode(err),
+          publicMessageFromErr(err, REVOKE_FAILED_MESSAGE, { context: "обновление ссылки" }),
+        );
+      }
+      if (err?.status === 503) return clientError(res, 503, REVOKE_UNAVAILABLE_MESSAGE);
+      if (err?.status === 404) return clientError(res, 404, REVOKE_NOT_FOUND_MESSAGE);
+      return clientError(res, 502, REVOKE_FAILED_MESSAGE);
+    }
+
+    req.log.info({ userUuid }, "subscription link revoked by user");
+    rmwReferralUserCache.delete(userUuid);
+
+    // /v1/auth/session reads the user from Remnawave and stores the new link in RMW,
+    // so the profile below already carries the fresh subscription URL.
+    let profile = null;
+    try {
+      profile = await loadUserProfileForEmail(req.session.email, req);
+    } catch (err) {
+      req.log.warn({ err }, "profile reload after revoke failed");
+    }
+    if (!profile?.user || extractUserUuidFromProfile(profile) !== userUuid) {
+      return res.json({ ok: true, subscriptionUrl: null, user: null, message: REVOKE_PROFILE_STALE_MESSAGE });
+    }
+
+    const subscriptionUrl =
+      typeof profile.user.subscriptionUrl === "string" && profile.user.subscriptionUrl.trim()
+        ? profile.user.subscriptionUrl.trim()
+        : null;
+    return res.json({
+      ok: true,
+      subscriptionUrl,
+      user: profile.user,
+      ...(subscriptionUrl ? {} : { message: REVOKE_PROFILE_STALE_MESSAGE }),
+    });
+  },
+);
 
 app.get("/api/billing/meta", async (req, res) => {
   try {

@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   KeyRound,
+  RefreshCw,
 } from "lucide-react";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
@@ -55,6 +56,7 @@ import LandingShell from "@/pages/landing/LandingShell";
 import LandingFooter from "@/pages/landing/LandingFooter";
 import DashboardSidebar, { type DashboardSidebarItem } from "@/components/DashboardSidebar";
 import PasswordDialog from "@/components/PasswordDialog";
+import RevokeSubscriptionDialog, { REVOKE_ACTION_LABEL } from "@/components/RevokeSubscriptionDialog";
 import { SIDEBAR_SHOW_OTHER, SIDEBAR_SHOW_REFERRALS } from "@/hooks/useDashboardSidebarItems";
 
 interface UserData {
@@ -230,6 +232,7 @@ const Dashboard = () => {
   const [subscriptionQrOpen, setSubscriptionQrOpen] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [hasPassword, setHasPassword] = useState(false);
+  const [revokeOpen, setRevokeOpen] = useState(false);
   const copySubscriptionButtonRef = useRef<HTMLButtonElement>(null);
   const autoPromoAttemptRef = useRef("");
 
@@ -378,6 +381,38 @@ const Dashboard = () => {
     }
   }, [userData?.userUuid]);
 
+  /** Применяет свежий профиль: состояние кабинета + кэши ссылки подписки для инструкций и чата. */
+  const applyUserProfile = useCallback(
+    (rawUser: unknown) => {
+      const normalizedUser = normalizeUserData(rawUser);
+      if (!normalizedUser) {
+        throw new Error("Некорректный формат данных пользователя");
+      }
+      if (normalizedUser.subscriptionUrl) {
+        setVpnSubscriptionUrl(normalizedUser.subscriptionUrl);
+      }
+      const talkmeJson = JSON.stringify({
+        usedTrafficBytes: normalizedUser.usedTrafficBytes,
+        trafficLimitBytes: normalizedUser.trafficLimitBytes,
+        expireAt: normalizedUser.expireAt,
+        currentDevices: normalizedUser.currentDevices,
+        devicesLimit: normalizedUser.devicesLimit,
+        tariff: normalizedUser.tariff,
+        plan: normalizedUser.plan,
+      });
+      setVpnTalkmeProfileJson(talkmeJson);
+      if (email) {
+        persistChatCompatCache({
+          email,
+          subscriptionUrl: normalizedUser.subscriptionUrl,
+          talkmeProfileJson: talkmeJson,
+        });
+      }
+      setUserData(normalizedUser);
+    },
+    [email],
+  );
+
   const refreshUserData = useCallback(async () => {
     if (!email) return;
     const { data, error: fnError } = await apiGet<{ user?: unknown; error?: string; exists?: boolean; hasPassword?: boolean }>("/me");
@@ -386,30 +421,23 @@ const Dashboard = () => {
       throw new Error(data?.error || "Не удалось получить данные");
     }
     setHasPassword(Boolean(data.hasPassword));
-    const normalizedUser = normalizeUserData(data.user);
-    if (!normalizedUser) {
-      throw new Error("Некорректный формат данных пользователя");
-    }
-    if (normalizedUser.subscriptionUrl) {
-      setVpnSubscriptionUrl(normalizedUser.subscriptionUrl);
-    }
-    const talkmeJson = JSON.stringify({
-      usedTrafficBytes: normalizedUser.usedTrafficBytes,
-      trafficLimitBytes: normalizedUser.trafficLimitBytes,
-      expireAt: normalizedUser.expireAt,
-      currentDevices: normalizedUser.currentDevices,
-      devicesLimit: normalizedUser.devicesLimit,
-      tariff: normalizedUser.tariff,
-      plan: normalizedUser.plan,
-    });
-    setVpnTalkmeProfileJson(talkmeJson);
-    persistChatCompatCache({
-      email,
-      subscriptionUrl: normalizedUser.subscriptionUrl,
-      talkmeProfileJson: talkmeJson,
-    });
-    setUserData(normalizedUser);
-  }, [email]);
+    applyUserProfile(data.user);
+  }, [email, applyUserProfile]);
+
+  const handleSubscriptionRevoked = useCallback(
+    async ({ user, subscriptionUrl }: { user: unknown; subscriptionUrl: string }) => {
+      if (subscriptionUrl) setVpnSubscriptionUrl(subscriptionUrl);
+      if (user) {
+        applyUserProfile(user);
+        return;
+      }
+      if (subscriptionUrl) {
+        setUserData((prev) => (prev ? { ...prev, subscriptionUrl } : prev));
+      }
+      await refreshUserData();
+    },
+    [applyUserProfile, refreshUserData],
+  );
 
   const applyPromoCode = useCallback(
     async (rawCode: string) => {
@@ -971,6 +999,17 @@ const Dashboard = () => {
                     </button>
                   </div>
                 </div>
+
+                <div className="dash-card__footer">
+                  <button
+                    type="button"
+                    className="dash-card__footer-btn"
+                    onClick={() => setRevokeOpen(true)}
+                  >
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                    {REVOKE_ACTION_LABEL}
+                  </button>
+                </div>
               </section>
 
               <section className="dash-card">
@@ -1094,7 +1133,8 @@ const Dashboard = () => {
                 <p>Здесь показаны устройства по HWID, привязанные к вашей учётной записи.</p>
                 <p className="dash-modal__desc-accent">
                   Важно: убрав устройство из списка, вы не отключаете его от аккаунта — только освобождаете слот под другое
-                  устройство. Чтобы закрыть доступ посторонним устройствам, напишите в поддержку — мы выпустим новую ссылку подключения.
+                  устройство. Чтобы закрыть доступ посторонним устройствам, нажмите «{REVOKE_ACTION_LABEL}» — старая
+                  ссылка перестанет работать, а свои устройства вы подключите заново по новой.
                 </p>
               </div>
             </DialogDescription>
@@ -1141,8 +1181,28 @@ const Dashboard = () => {
               ))}
             </div>
           )}
+
+          <div className="dash-modal__stack dash-modal__actions">
+            <button
+              type="button"
+              className="dash-modal-btn dash-modal-btn--ghost"
+              onClick={() => {
+                setDevicesOpen(false);
+                setRevokeOpen(true);
+              }}
+            >
+              <RefreshCw className="h-5 w-5" aria-hidden="true" />
+              {REVOKE_ACTION_LABEL}
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
+
+      <RevokeSubscriptionDialog
+        open={revokeOpen}
+        onOpenChange={setRevokeOpen}
+        onRevoked={handleSubscriptionRevoked}
+      />
 
       <Dialog open={subscriptionQrOpen} onOpenChange={setSubscriptionQrOpen}>
         <DialogContent className="dash-modal sm:max-w-sm">
@@ -1483,7 +1543,7 @@ const Dashboard = () => {
                 </li>
                 <li>Мощное шифрование и полная защита от утечек данных.</li>
                 <li>Никакого спама, баннеров и слежки — только чистый интернет.</li>
-                <li>Команда заботы, готовая прийти на помощь 24/7.</li>
+                <li>Команда заботы на связи ежедневно с 05:00 до 01:00 по МСК.</li>
               </ul>
             </div>
             <div className="dash-modal__stack" style={{ marginTop: 22 }}>
