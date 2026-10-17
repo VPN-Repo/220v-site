@@ -3913,6 +3913,45 @@ body.landing-no-scroll { overflow: hidden; }
   }
 }
 
+/* Второстепенное разрушительное действие: контур, без заливки, красный текст. */
+.dash-modal .dash-modal-btn--danger-outline {
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 600;
+  background: transparent;
+  border-color: rgba(255, 89, 89, 0.3);
+  color: #ff9a9a;
+}
+@media (hover: hover) {
+  .dash-modal .dash-modal-btn--danger-outline:hover:not(:disabled) {
+    background: rgba(255, 89, 89, 0.08);
+    border-color: rgba(255, 89, 89, 0.5);
+  }
+}
+
+.dash-modal .dash-modal__danger-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--dm-border);
+}
+.dash-modal .dash-modal__danger-hint {
+  margin: 0;
+  color: var(--dm-muted-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.dash-modal .dash-modal__warning {
+  margin: 0 0 12px;
+  color: var(--dm-danger);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .dash-modal .dash-modal-btn--split {
   justify-content: space-between;
   text-align: left;

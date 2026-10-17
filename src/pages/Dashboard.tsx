@@ -24,7 +24,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   KeyRound,
-  RefreshCw,
 } from "lucide-react";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
@@ -1000,16 +999,6 @@ const Dashboard = () => {
                   </div>
                 </div>
 
-                <div className="dash-card__footer">
-                  <button
-                    type="button"
-                    className="dash-card__footer-btn"
-                    onClick={() => setRevokeOpen(true)}
-                  >
-                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                    {REVOKE_ACTION_LABEL}
-                  </button>
-                </div>
               </section>
 
               <section className="dash-card">
@@ -1133,8 +1122,8 @@ const Dashboard = () => {
                 <p>Здесь показаны устройства по HWID, привязанные к вашей учётной записи.</p>
                 <p className="dash-modal__desc-accent">
                   Важно: убрав устройство из списка, вы не отключаете его от аккаунта — только освобождаете слот под другое
-                  устройство. Чтобы закрыть доступ посторонним устройствам, нажмите «{REVOKE_ACTION_LABEL}» — старая
-                  ссылка перестанет работать, а свои устройства вы подключите заново по новой.
+                  устройство. Если ссылку узнали посторонние, внизу этого окна есть «{REVOKE_ACTION_LABEL}» — старая
+                  ссылка перестанет работать, а свои устройства придётся подключить заново.
                 </p>
               </div>
             </DialogDescription>
@@ -1182,16 +1171,16 @@ const Dashboard = () => {
             </div>
           )}
 
-          <div className="dash-modal__stack dash-modal__actions">
+          <div className="dash-modal__danger-zone">
+            <p className="dash-modal__danger-hint">Если ссылку узнали посторонние</p>
             <button
               type="button"
-              className="dash-modal-btn dash-modal-btn--ghost"
+              className="dash-modal-btn dash-modal-btn--danger-outline"
               onClick={() => {
                 setDevicesOpen(false);
                 setRevokeOpen(true);
               }}
             >
-              <RefreshCw className="h-5 w-5" aria-hidden="true" />
               {REVOKE_ACTION_LABEL}
             </button>
           </div>

@@ -16,16 +16,28 @@ describe("revoke subscription dialog", () => {
     vi.clearAllMocks();
   });
 
-  it("explains the consequences before anything is revoked", () => {
+  it("warns prominently before anything is reset", () => {
     render(<RevokeSubscriptionDialog open onOpenChange={vi.fn()} onRevoked={vi.fn()} />);
 
-    expect(screen.getByRole("heading", { name: "Обновить ссылку подключения?" })).toBeInTheDocument();
-    expect(screen.getByText(/ссылка попала к посторонним или кто-то чужой пользуется/)).toBeInTheDocument();
-    expect(screen.getByText(/Старая ссылка перестанет работать/)).toBeInTheDocument();
-    expect(screen.getByText(/сразу на всех устройствах/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Сбросить ссылку подключения?" })).toBeInTheDocument();
+    const warning = screen.getByText("VPN сразу перестанет работать на всех ваших устройствах.");
+    expect(warning).toHaveClass("dash-modal__warning");
+    expect(screen.getByText(/только если ссылку узнали посторонние/)).toBeInTheDocument();
+    expect(screen.getByText(/сбрасывать не нужно, напишите в поддержку/)).toBeInTheDocument();
     expect(screen.getByText(/вставьте новую ссылку в приложение/)).toBeInTheDocument();
     expect(screen.getByText(/Список устройств не очищается/)).toBeInTheDocument();
+    expect(screen.getByText(/не чаще 3 раз в час/)).toBeInTheDocument();
     expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it("makes cancel the safe default and the confirm button destructive", async () => {
+    render(<RevokeSubscriptionDialog open onOpenChange={vi.fn()} onRevoked={vi.fn()} />);
+    const cancel = screen.getByRole("button", { name: "Отмена" });
+    const confirm = screen.getByRole("button", { name: "Да, сбросить ссылку" });
+    expect(confirm).toHaveClass("dash-modal-btn--danger");
+    expect(confirm).not.toHaveClass("dash-modal-btn--primary");
+    expect(cancel).not.toHaveClass("dash-modal-btn--danger");
+    await waitFor(() => expect(cancel).toHaveFocus());
   });
 
   it("cancel closes without calling the API", () => {
@@ -36,7 +48,7 @@ describe("revoke subscription dialog", () => {
     expect(apiPost).not.toHaveBeenCalled();
   });
 
-  it("revokes on confirm, shows a toast and the new link with a copy button", async () => {
+  it("resets on confirm, shows a toast and the new link with a copy button", async () => {
     const onRevoked = vi.fn();
     const user = { userUuid: "u", subscriptionUrl: NEW_URL };
     vi.mocked(apiPost).mockResolvedValue({
@@ -47,11 +59,11 @@ describe("revoke subscription dialog", () => {
     vi.mocked(copyText).mockResolvedValue(true);
     render(<RevokeSubscriptionDialog open onOpenChange={vi.fn()} onRevoked={onRevoked} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Обновить ссылку" }));
+    fireEvent.click(screen.getByRole("button", { name: "Да, сбросить ссылку" }));
 
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/me/subscription/revoke"));
-    expect(await screen.findByRole("heading", { name: "Ссылка обновлена" })).toBeInTheDocument();
-    expect(toast.success).toHaveBeenCalledWith("Ссылка подключения обновлена", expect.anything());
+    expect(await screen.findByRole("heading", { name: "Ссылка сброшена" })).toBeInTheDocument();
+    expect(toast.success).toHaveBeenCalledWith("Ссылка подключения сброшена", expect.anything());
     expect(onRevoked).toHaveBeenCalledWith({ user, subscriptionUrl: NEW_URL });
     expect(screen.getByLabelText("Новая ссылка подключения")).toHaveValue(NEW_URL);
 
@@ -69,7 +81,7 @@ describe("revoke subscription dialog", () => {
     const onRevoked = vi.fn();
     render(<RevokeSubscriptionDialog open onOpenChange={vi.fn()} onRevoked={onRevoked} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Обновить ссылку" }));
+    fireEvent.click(screen.getByRole("button", { name: "Да, сбросить ссылку" }));
 
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(
@@ -77,8 +89,8 @@ describe("revoke subscription dialog", () => {
       ),
     );
     expect(onRevoked).not.toHaveBeenCalled();
-    expect(screen.getByRole("heading", { name: "Обновить ссылку подключения?" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Обновить ссылку" })).toBeEnabled();
+    expect(screen.getByRole("heading", { name: "Сбросить ссылку подключения?" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Да, сбросить ссылку" })).toBeEnabled();
   });
 
   it("asks to reload when the new link could not be loaded", async () => {
@@ -88,7 +100,7 @@ describe("revoke subscription dialog", () => {
       status: 200,
     });
     render(<RevokeSubscriptionDialog open onOpenChange={vi.fn()} onRevoked={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Обновить ссылку" }));
+    fireEvent.click(screen.getByRole("button", { name: "Да, сбросить ссылку" }));
     expect(await screen.findByText("Ссылка обновлена, но новую ссылку не удалось загрузить.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Скопировать ссылку" })).not.toBeInTheDocument();
   });
