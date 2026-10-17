@@ -43,7 +43,7 @@ describe("login by password", () => {
   it("sends a code as before when the account has no password", async () => {
     vi.mocked(apiPost).mockImplementation(async (path: string) => {
       if (path === "/auth/method") return { data: { hasPassword: false }, error: null, status: 200 };
-      if (path === "/auth/send-code") return { data: { ok: true, retryAfterSec: 60 }, error: null, status: 200 };
+      if (path === "/auth/send-code") return { data: { ok: true, retryAfterSec: 30 }, error: null, status: 200 };
       return { data: null, error: null, status: 200 };
     });
 

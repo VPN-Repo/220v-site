@@ -141,7 +141,7 @@ describe("login retry messages", () => {
   it("shows the attempt number and how many code attempts are left", async () => {
     vi.mocked(apiPost).mockImplementation(async (path: string) => {
       if (path === "/auth/method") return ok({ hasPassword: false });
-      if (path === "/auth/send-code") return ok({ ok: true, retryAfterSec: 60, sendNumber: 1 });
+      if (path === "/auth/send-code") return ok({ ok: true, retryAfterSec: 30, sendNumber: 1 });
       return fail(400, { error: "Неверный код. Осталось попыток: 3 из 5", attempt: 2, attemptsLeft: 3, maxAttempts: 5 });
     });
     await openCodeStep();
@@ -187,7 +187,7 @@ describe("password dialog retry messages", () => {
   });
 
   it("announces a repeat send", async () => {
-    vi.mocked(apiPost).mockResolvedValue(ok({ ok: true, retryAfterSec: 60, sendNumber: 3 }));
+    vi.mocked(apiPost).mockResolvedValue(ok({ ok: true, retryAfterSec: 30, sendNumber: 3 }));
     render(<PasswordDialog open onOpenChange={vi.fn()} hasPassword onChanged={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Новый пароль"), { target: { value: "abcde1" } });
     fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "abcde1" } });

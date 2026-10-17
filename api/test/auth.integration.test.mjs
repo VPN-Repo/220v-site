@@ -134,9 +134,9 @@ describe("auth integration", () => {
     const email = "cleanup@example.com";
 
     await putOtp(email, hashCode("11111"), "owner-old");
-    await redis.set(otpCooldownKey(email), "owner-old", "EX", 60);
+    await redis.set(otpCooldownKey(email), "owner-old", "EX", 30);
     await putOtp(email, hashCode("22222"), "owner-new");
-    await redis.set(otpCooldownKey(email), "owner-new", "EX", 60);
+    await redis.set(otpCooldownKey(email), "owner-new", "EX", 30);
 
     await clearOtpAndCooldown(email, "owner-old");
 

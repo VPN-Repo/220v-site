@@ -134,7 +134,7 @@ describe("auth retry messages", () => {
       .send({});
     const first = await send();
     assert.equal(first.status, 200);
-    assert.deepEqual(first.body, { ok: true, retryAfterSec: 60, sendNumber: 1 });
+    assert.deepEqual(first.body, { ok: true, retryAfterSec: 30, sendNumber: 1 });
     await redis.expire(passwordCooldownKey(sid), 21);
     const res = await send();
     assert.equal(res.status, 429);
@@ -170,10 +170,10 @@ describe("auth retry messages", () => {
   it("send-code returns which send this is in the window", async () => {
     const first = await sendCode();
     assert.equal(first.status, 200);
-    assert.deepEqual(first.body, { ok: true, retryAfterSec: 60, sendNumber: 1 });
+    assert.deepEqual(first.body, { ok: true, retryAfterSec: 30, sendNumber: 1 });
     await redis.del(otpCooldownKey(email));
     const second = await sendCode();
     assert.equal(second.status, 200);
-    assert.deepEqual(second.body, { ok: true, retryAfterSec: 60, sendNumber: 2 });
+    assert.deepEqual(second.body, { ok: true, retryAfterSec: 30, sendNumber: 2 });
   });
 });

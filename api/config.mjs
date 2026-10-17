@@ -7,7 +7,7 @@ export const CSRF_COOKIE = "v220_csrf";
 export const SESSION_TTL_SEC = 60 * 24 * 60 * 60;
 export const SESSION_SLIDE_SEC = 30 * 24 * 60 * 60;
 export const OTP_TTL_SEC = 10 * 60;
-export const OTP_COOLDOWN_SEC = 60;
+export const OTP_COOLDOWN_SEC = 30;
 // Window in which a repeated OTP email counts as a resend and goes through the backup SMTP.
 export const OTP_PROVIDER_WINDOW_SEC = 15 * 60;
 export const OTP_MAX_TRIES = 5;

@@ -88,7 +88,7 @@ app.use(createAuthRouter({
 const lastHost = () => sent.at(-1)?.host;
 const sendCode = (email) =>
   request(app).post("/api/auth/send-code").set("X-Forwarded-For", nextIp()).send({ email });
-// The 60s cooldown is unchanged; tests skip it by dropping the cooldown key.
+// The 30s cooldown is unchanged; tests skip it by dropping the cooldown key.
 const skipCooldown = (email) => redis.del(otpCooldownKey(email));
 const expireWindow = async (key) => {
   await redis.pexpire(key, 10);
@@ -206,7 +206,7 @@ describe("login code resends", () => {
     assert.equal((await sendCode(email)).status, 200);
     assert.equal(lastHost(), PRIMARY);
 
-    // The unchanged 60s cooldown still rejects an immediate resend.
+    // The unchanged 30s cooldown still rejects an immediate resend.
     assert.equal((await sendCode(email)).status, 429);
     assert.equal(sent.length, 1);
 

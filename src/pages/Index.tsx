@@ -277,7 +277,7 @@ const Index = () => {
         setCode("");
         setCodeAttempts(null);
         setLoginStep("verify");
-        setResendCooldownSec(retryAfterSec ?? data.retryAfterSec ?? 60);
+        setResendCooldownSec(retryAfterSec ?? data.retryAfterSec ?? 30);
         toast({
           title: "✅ Код отправлен!",
           description: resendNotice(data.sendNumber) || `Код подтверждения отправлен на ${normalizedEmail}`,
