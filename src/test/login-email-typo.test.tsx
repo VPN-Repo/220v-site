@@ -68,6 +68,28 @@ describe("login email typo hint", () => {
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/auth/send-code", { email: "ivan@gmail.com" }));
   });
 
+  it("explains local-part junk and removes it in one tap", async () => {
+    const input = await openLogin();
+    fireEvent.change(input, { target: { value: "ivan-@gmail.com" } });
+    fireEvent.blur(input);
+
+    const hint = screen.getByTestId("email-typo-hint");
+    expect(hint).toHaveTextContent("Похоже, в адресе опечатка: лишний «-» перед @");
+    fireEvent.click(within(hint).getByRole("button", { name: "Исправить" }));
+    expect(input).toHaveValue("ivan@gmail.com");
+  });
+
+  it("sends a local-part typo as typed on the second press (server never rejects it)", async () => {
+    const input = await openLogin();
+    fireEvent.change(input, { target: { value: "ivan-@gmail.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить" }));
+    expect(await screen.findByTestId("email-typo-hint")).toBeInTheDocument();
+    expect(apiPost).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить" }));
+    await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/auth/send-code", { email: "ivan-@gmail.com" }));
+  });
+
   it("holds the first submit to reveal the hint, then sends as typed (non-blocking)", async () => {
     const input = await openLogin();
     fireEvent.change(input, { target: { value: "ivan@mail.ry" } });

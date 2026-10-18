@@ -104,24 +104,57 @@ function suggestDomain(domain: string): string {
   return best && !tie ? best : domain;
 }
 
+/** Plain-language list of what is wrong with the local part, e.g. "лишний «-» перед @". */
+export function describeLocalPartIssues(local: string): string[] {
+  const issues: string[] = [];
+  if (/\s/.test(local)) issues.push("пробел в адресе");
+  const trimmed = local.replace(/\s+/g, "");
+  if (/^\./.test(trimmed)) issues.push("лишняя точка в начале");
+  if (/\.{2,}/.test(trimmed)) issues.push("две точки подряд");
+  const tail = /[-._]+$/.exec(trimmed)?.[0];
+  if (tail) issues.push(tail.length === 1 ? `лишний «${tail}» перед @` : `лишние «${tail}» перед @`);
+  return issues;
+}
+
+export type EmailTypo = {
+  /** The corrected email to offer as a one-tap fix. */
+  suggestion: string;
+  /** True when the domain was corrected ("gmial.com" -> "gmail.com"). */
+  domainChanged: boolean;
+  /** Local-part problems, for a "Похоже, в адресе опечатка: ..." hint. */
+  localIssues: string[];
+};
+
 /**
- * Returns a corrected email when the input looks like a typo, otherwise null.
- * Never suggests anything for a well-formed address on a known or uncommon domain.
+ * Detects a likely typo and returns the fix, otherwise null.
+ * Never flags a well-formed address on a known or uncommon domain.
  */
-export function suggestEmailFix(input: string): string | null {
+export function checkEmailTypo(input: string): EmailTypo | null {
   const email = input.trim().toLowerCase();
   const at = email.lastIndexOf("@");
   if (at <= 0 || at === email.length - 1) return null;
 
-  const local = cleanLocalPart(email.slice(0, at));
-  const rawDomain = email
-    .slice(at + 1)
+  const rawLocal = email.slice(0, at);
+  const local = cleanLocalPart(rawLocal);
+  const rawDomain = email.slice(at + 1);
+  const cleanDomain = rawDomain
     .replace(/\s+/g, "")
     .replace(/,/g, ".")
     .replace(/\.{2,}/g, ".")
     .replace(/^\.+|\.+$/g, "");
-  if (!local || !rawDomain || local.includes("@")) return null;
+  if (!local || !cleanDomain || local.includes("@")) return null;
 
-  const suggestion = `${local}@${suggestDomain(rawDomain)}`;
-  return suggestion === email ? null : suggestion;
+  const domain = suggestDomain(cleanDomain);
+  const suggestion = `${local}@${domain}`;
+  if (suggestion === email) return null;
+  return {
+    suggestion,
+    domainChanged: domain !== rawDomain,
+    localIssues: local === rawLocal ? [] : describeLocalPartIssues(rawLocal),
+  };
+}
+
+/** Returns a corrected email when the input looks like a typo, otherwise null. */
+export function suggestEmailFix(input: string): string | null {
+  return checkEmailTypo(input)?.suggestion ?? null;
 }

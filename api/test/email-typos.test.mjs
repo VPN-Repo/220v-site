@@ -9,7 +9,6 @@ process.env.LOG_LEVEL = process.env.LOG_LEVEL || "silent";
 
 const { redis } = await import("../redis.mjs");
 const { createAuthRouter } = await import("../auth/routes.mjs");
-const { hasLocalPartTypo } = await import("../auth/emailTypos.mjs");
 
 const sent = [];
 const quietLog = { info() {}, warn() {}, debug() {}, error() {} };
@@ -42,41 +41,22 @@ after(async () => {
   await redis.quit();
 });
 
-describe("hasLocalPartTypo", () => {
-  it("flags junk that only comes from typos", () => {
-    for (const local of ["ivan-", "ivan.", "ivan_", "ivan--", ".ivan", "iv..an"]) {
-      assert.equal(hasLocalPartTypo(local), true, local);
-    }
-  });
-
-  it("accepts ordinary local parts", () => {
-    for (const local of ["ivan", "ivan.petrov", "ivan-petrov", "ivan_petrov", "i", "ivan2000", "a.b.c"]) {
-      assert.equal(hasLocalPartTypo(local), false, local);
-    }
-  });
-});
-
-describe("POST /api/auth/send-code local-part typos", () => {
-  it("rejects a trailing hyphen before sending any code", async () => {
-    const res = await sendCode("ivan-@gmail.com");
-    assert.equal(res.status, 400);
-    assert.equal(res.body.error, "Проверьте адрес: похоже, в нём опечатка");
-    assert.deepEqual(sent, []);
-  });
-
-  it("rejects double dots and a trailing dot", async () => {
-    for (const email of ["iv..an@mail.ru", "ivan.@yandex.ru", "ivan_@bk.ru"]) {
+// Owner decision: typos are only hinted in the UI, the server never rejects them.
+describe("POST /api/auth/send-code does not reject typo-looking addresses", () => {
+  it("sends a code to local parts with a trailing separator, double or leading dots", async () => {
+    const emails = ["ivan-@gmail.com", "iv..an@mail.ru", "ivan.@yandex.ru", ".ivan@bk.ru", "ivan_@list.ru"];
+    for (const email of emails) {
       const res = await sendCode(email);
-      assert.equal(res.status, 400, email);
-      assert.match(res.body.error, /опечатка/);
+      assert.equal(res.status, 200, email);
+      assert.equal(res.body.ok, true, email);
     }
-    assert.deepEqual(sent, []);
+    assert.deepEqual(sent, emails);
   });
 
-  it("still sends a code to a valid address", async () => {
-    const res = await sendCode("ivan-petrov@gmail.com");
-    assert.equal(res.status, 200);
-    assert.equal(res.body.ok, true);
-    assert.deepEqual(sent, ["ivan-petrov@gmail.com"]);
+  it("keeps the existing domain allowlist", async () => {
+    const res = await sendCode("ivan@mail.ry");
+    assert.equal(res.status, 400);
+    assert.match(res.body.error, /домен не поддерживается/);
+    assert.deepEqual(sent, []);
   });
 });

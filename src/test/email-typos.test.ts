@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanLocalPart, damerauLevenshtein, suggestEmailFix } from "@/lib/emailTypos";
+import { checkEmailTypo, cleanLocalPart, damerauLevenshtein, suggestEmailFix } from "@/lib/emailTypos";
 
 describe("damerauLevenshtein", () => {
   it("counts an adjacent swap as one edit", () => {
@@ -112,5 +112,33 @@ describe("suggestEmailFix", () => {
       expect(fixed).not.toBeNull();
       expect(suggestEmailFix(fixed as string)).toBeNull();
     }
+  });
+});
+
+describe("checkEmailTypo", () => {
+  it("describes local-part junk in plain words", () => {
+    expect(checkEmailTypo("ivan-@gmail.com")).toEqual({
+      suggestion: "ivan@gmail.com",
+      domainChanged: false,
+      localIssues: ["лишний «-» перед @"],
+    });
+    expect(checkEmailTypo("ivan._@mail.ru")?.localIssues).toEqual(["лишние «._» перед @"]);
+    expect(checkEmailTypo(".ivan@mail.ru")?.localIssues).toEqual(["лишняя точка в начале"]);
+    expect(checkEmailTypo("iv..an@mail.ru")?.localIssues).toEqual(["две точки подряд"]);
+    expect(checkEmailTypo("ivan petrov@mail.ru")?.localIssues).toEqual(["пробел в адресе"]);
+  });
+
+  it("marks domain corrections separately", () => {
+    expect(checkEmailTypo("ivan@gmial.com")).toEqual({
+      suggestion: "ivan@gmail.com",
+      domainChanged: true,
+      localIssues: [],
+    });
+    expect(checkEmailTypo("ivan-@mail.ry")).toMatchObject({ domainChanged: true, localIssues: ["лишний «-» перед @"] });
+  });
+
+  it("returns null for valid addresses", () => {
+    expect(checkEmailTypo("ivan.petrov@mail.ru")).toBeNull();
+    expect(checkEmailTypo("ivan@company.ru")).toBeNull();
   });
 });
