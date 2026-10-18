@@ -4888,6 +4888,10 @@ body.landing-no-scroll { overflow: hidden; }
 @media (pointer: coarse) {
   .landing-root .login-card .login-typo-hint button { padding: 6px 12px; }
 }
+.landing-root .login-card .login-typo-hint--code {
+  margin: -14px 0 18px;
+  text-align: center;
+}
 .landing-root .modal__subtitle .login-sent-email {
   color: #fff;
   font-weight: 600;

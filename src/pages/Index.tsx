@@ -27,7 +27,6 @@ import {
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import PasswordVisibilityButton from "@/components/PasswordVisibilityButton";
 import { EmailTypoHint } from "@/components/EmailTypoHint";
-import { suggestEmailFix } from "@/lib/emailTypos";
 import { isValidNewPassword, PASSWORD_REQUIREMENTS, SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/password";
 
 import LandingShell from "@/pages/landing/LandingShell";
@@ -110,6 +109,9 @@ async function getBrowserFingerprint(): Promise<string> {
 
 type LoginStep = "email" | "password" | "verify";
 
+// Pause after the last keystroke before the email typo hint appears.
+const EMAIL_HINT_DELAY_MS = 800;
+
 const Index = () => {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -120,10 +122,8 @@ const Index = () => {
   const [hasPassword, setHasPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loginStep, setLoginStep] = useState<LoginStep>("email");
-  // The typo hint shows after the field loses focus, or after one "Продолжить" press
-  // that was held back so the user sees the hint before a code goes to a wrong address.
-  const [emailBlurred, setEmailBlurred] = useState(false);
-  const [typoHeldFor, setTypoHeldFor] = useState<string | null>(null);
+  // The typo hint shows once typing pauses or the field loses focus; it never blocks sending.
+  const [emailSettled, setEmailSettled] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [pricingOpen, setPricingOpen] = useState(false);
@@ -145,6 +145,12 @@ const Index = () => {
   const { refresh: refreshSession } = useSession();
 
   const normalizedEmail = email.trim().toLowerCase();
+
+  useEffect(() => {
+    if (emailSettled) return;
+    const timer = window.setTimeout(() => setEmailSettled(true), EMAIL_HINT_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [email, emailSettled]);
 
   useEffect(() => {
     const sp = new URLSearchParams(location.search);
@@ -216,6 +222,16 @@ const Index = () => {
     setRepeatPassword("");
     setSettingPassword(false);
     setShowPassword(false);
+  };
+
+  // Fix from the code screen: back to the email step with the corrected address.
+  const applyEmailFixFromCodeStep = (fixed: string) => {
+    setEmail(fixed);
+    setEmailSettled(true);
+    setCode("");
+    resetPasswordFields();
+    setCodeAttempts(null);
+    setLoginStep("email");
   };
 
   const openLogin = () => {
@@ -314,11 +330,6 @@ const Index = () => {
   // по коду.
   const handleStart = async () => {
     if (sendingRef.current) return;
-    // Non-blocking: the first press on a likely typo only reveals the hint, the next one sends.
-    if (suggestEmailFix(email) && typoHeldFor !== email) {
-      setTypoHeldFor(email);
-      return;
-    }
     if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       toast({ title: "Ошибка", description: "Укажите корректный email", variant: "destructive" });
       return;
@@ -744,22 +755,18 @@ const Index = () => {
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
-                  setEmailBlurred(false);
+                  setEmailSettled(false);
                 }}
-                onBlur={() => setEmailBlurred(true)}
+                onBlur={() => setEmailSettled(true)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") void handleStart();
                 }}
                 disabled={loading}
               />
-              {emailBlurred || typoHeldFor === email ? (
+              {emailSettled ? (
                 <EmailTypoHint
                   email={email}
-                  onApply={(fixed) => {
-                    setEmail(fixed);
-                    setEmailBlurred(false);
-                    setTypoHeldFor(null);
-                  }}
+                  onApply={setEmail}
                   disabled={loading}
                   className="login-typo-hint"
                 />
@@ -849,6 +856,12 @@ const Index = () => {
           </form>
         ) : (
           <div className="login-card" style={{ background: "transparent", border: 0, padding: 0, boxShadow: "none" }}>
+            <EmailTypoHint
+              email={normalizedEmail}
+              onApply={applyEmailFixFromCodeStep}
+              disabled={loading}
+              className="login-typo-hint login-typo-hint--code"
+            />
             {settingPassword ? (
               <div className="login-password-fields">
                 <div className="password-field">
@@ -953,8 +966,6 @@ const Index = () => {
                 onClick={() => {
                   setCode("");
                   resetPasswordFields();
-                  setEmailBlurred(false);
-                  setTypoHeldFor(null);
                   setLoginStep("email");
                 }}
                 disabled={loading}

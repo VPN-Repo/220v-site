@@ -45,10 +45,13 @@ describe("login email typo hint", () => {
     });
   });
 
-  it("does not interrupt the user while typing", async () => {
+  it("shows the hint once typing pauses, not on every keystroke", async () => {
     const input = await openLogin();
     fireEvent.change(input, { target: { value: "ivan@gmial.com" } });
     expect(screen.queryByTestId("email-typo-hint")).not.toBeInTheDocument();
+    expect(await screen.findByTestId("email-typo-hint", {}, { timeout: 2000 })).toHaveTextContent(
+      "Возможно, вы имели в виду ivan@gmail.com?",
+    );
   });
 
   it("shows the hint on blur and fixes the email in one tap", async () => {
@@ -79,27 +82,29 @@ describe("login email typo hint", () => {
     expect(input).toHaveValue("ivan@gmail.com");
   });
 
-  it("sends a local-part typo as typed on the second press (server never rejects it)", async () => {
+  it("always sends right away, even with a likely typo", async () => {
+    const input = await openLogin();
+    fireEvent.change(input, { target: { value: "ivan-@gmail.com" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/auth/send-code", { email: "ivan-@gmail.com" }));
+    expect(sendCodeCalls()).toHaveLength(1);
+  });
+
+  it("repeats the hint on the code screen and fixes the address from there", async () => {
     const input = await openLogin();
     fireEvent.change(input, { target: { value: "ivan-@gmail.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Продолжить" }));
-    expect(await screen.findByTestId("email-typo-hint")).toBeInTheDocument();
-    expect(apiPost).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Продолжить" }));
-    await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/auth/send-code", { email: "ivan-@gmail.com" }));
-  });
+    expect(await screen.findByRole("heading", { name: "Введите код" })).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("ivan-@gmail.com", { selector: "b" })).toBeInTheDocument();
+    const hint = within(dialog).getByTestId("email-typo-hint");
+    expect(hint).toHaveTextContent("Похоже, в адресе опечатка: лишний «-» перед @");
 
-  it("holds the first submit to reveal the hint, then sends as typed (non-blocking)", async () => {
-    const input = await openLogin();
-    fireEvent.change(input, { target: { value: "ivan@mail.ry" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-
-    expect(await screen.findByTestId("email-typo-hint")).toHaveTextContent("ivan@mail.ru");
-    expect(apiPost).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: "Продолжить" }));
-    await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/auth/send-code", { email: "ivan@mail.ry" }));
+    fireEvent.click(within(hint).getByRole("button", { name: "Исправить" }));
+    expect(await screen.findByRole("heading", { name: "Вход в 220v" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Email")).toHaveValue("ivan@gmail.com");
+    expect(sendCodeCalls()).toHaveLength(1);
   });
 
   it("never shows a hint for a valid address", async () => {
@@ -121,6 +126,7 @@ describe("login email typo hint", () => {
     const sentTo = within(dialog).getByText("ivan@gmail.com", { selector: "b" });
     expect(sentTo.closest("p")).toHaveTextContent("Код отправлен на ivan@gmail.com");
     expect(within(dialog).getByText(/Не та почта\?/)).toBeInTheDocument();
+    expect(within(dialog).queryByTestId("email-typo-hint")).not.toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Изменить" }));
     expect(await screen.findByRole("heading", { name: "Вход в 220v" })).toBeInTheDocument();
