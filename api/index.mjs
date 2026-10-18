@@ -16,6 +16,7 @@ import {
   emailUnsubscribeIpLimiter,
   refClickIpLimiter,
   subscriptionRevokeUserLimiter,
+  unisenderWebhookIpLimiter,
 } from "./http/rateLimit.mjs";
 import { recordReferralEvent, queryReferralEvents } from "./referrals/events.mjs";
 import {
@@ -45,12 +46,13 @@ import {
   revokeReferralExchangePermission,
 } from "./referrals/userStatus.mjs";
 import { SESSION_COOKIE } from "./config.mjs";
-import { base64url, emailHash } from "./auth/crypto.mjs";
+import { base64url, emailHash, maskEmail } from "./auth/crypto.mjs";
 import { createAuthRouter } from "./auth/routes.mjs";
 import { requireSession, getSession, requireAdminToken } from "./auth/session.mjs";
 import { getCredential } from "./auth/password.mjs";
 import { getMailerConfigSummary, sendOtpEmail, verifyMailerConfig } from "./mailer.mjs";
 import { registerTalkMeRoutes } from "./talkme-routes.mjs";
+import { createUnisenderWebhookRouter } from "./email/unisenderBounces.mjs";
 import { trafficPurchaseRestriction } from "./billing/trafficEligibility.mjs";
 import {
   UnsubscribeTokenConfigError,
@@ -58,14 +60,37 @@ import {
   verifyUnsubscribeToken,
 } from "./email/unsubscribeToken.mjs";
 
+// GET /api/auth/delivery-status carries ?email=; request logs keep only the masked address.
+function maskEmailInRequestLog(req) {
+  if (typeof req?.url !== "string" || !req.url.includes("email=")) return req;
+  const masked = { ...req };
+  masked.url = req.url.replace(/([?&]email=)([^&#]*)/g, (_m, prefix, value) => {
+    let decoded = value;
+    try {
+      decoded = decodeURIComponent(value);
+    } catch {
+      // keep the raw value
+    }
+    return `${prefix}${encodeURIComponent(maskEmail(decoded) || "***")}`;
+  });
+  if (masked.query && typeof masked.query.email === "string") {
+    masked.query = { ...masked.query, email: maskEmail(masked.query.email) || "***" };
+  }
+  return masked;
+}
+
 const app = express();
 app.set("trust proxy", 1);
 app.use(
   pinoHttp({
     logger,
     autoLogging: { ignore: (req) => req.url === "/api/health" },
+    serializers: { req: maskEmailInRequestLog },
   }),
 );
+// Before express.json: the Unisender webhook reads its raw body itself (1 MB, gzip),
+// because the auth hash is computed over the exact bytes.
+app.use(createUnisenderWebhookRouter({ limiter: unisenderWebhookIpLimiter }));
 app.use(express.json({ limit: "16kb" }));
 app.use(cookieParser());
 

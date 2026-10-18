@@ -42,6 +42,12 @@ export async function putOtp(email, codeHash, owner, authVersion = 0) {
   );
 }
 
+/** The owner token of the pending login code for email, or null. */
+export async function getOtpOwner(email) {
+  const { parsed } = parseOtpPayload(await redis.get(otpKey(email)));
+  return typeof parsed?.owner === "string" && parsed.owner ? parsed.owner : null;
+}
+
 export async function getOtpDebugSnapshot(email) {
   const key = otpKey(email);
   const [ttlSec, type] = await Promise.all([redis.ttl(key), redis.type(key)]);

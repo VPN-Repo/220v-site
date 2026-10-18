@@ -109,6 +109,19 @@ async function getBrowserFingerprint(): Promise<string> {
 
 type LoginStep = "email" | "password" | "verify";
 
+/** A known delivery problem for the address (Unisender bounce), shown on the code screen. */
+type DeliveryWarning = { category: string; message: string };
+
+// After each send the code screen asks for bounces every 10 s for 2 minutes.
+const DELIVERY_STATUS_POLL_MS = 10_000;
+const DELIVERY_STATUS_MAX_POLLS = (2 * 60_000) / DELIVERY_STATUS_POLL_MS;
+
+function asDeliveryWarning(value: unknown): DeliveryWarning | null {
+  if (!value || typeof value !== "object") return null;
+  const { category, message } = value as Record<string, unknown>;
+  return typeof category === "string" && typeof message === "string" && message ? { category, message } : null;
+}
+
 // Pause after the last keystroke before the email typo hint appears.
 const EMAIL_HINT_DELAY_MS = 800;
 
@@ -132,6 +145,9 @@ const Index = () => {
   const [resendCooldownSec, setResendCooldownSec] = useState(0);
   // Attempt counters from the last wrong code; cleared when a new code is sent.
   const [codeAttempts, setCodeAttempts] = useState<CodeAttempts | null>(null);
+  const [deliveryWarning, setDeliveryWarning] = useState<DeliveryWarning | null>(null);
+  // Bumped on every successful send; restarts the delivery-status polling.
+  const [deliveryPollId, setDeliveryPollId] = useState(0);
   const [sessionReady, setSessionReady] = useState(false);
   // На мобильных устройствах между тапом и обновлением React-state (disabled
   // на кнопке) может пройти кадр — этого хватает, чтобы успеть зарегистрировать
@@ -216,6 +232,47 @@ const Index = () => {
     return () => window.clearTimeout(timer);
   }, [resendCooldownSec]);
 
+  // Soft warning only: polling never blocks the code entry. It stops when a
+  // warning arrives, after 2 minutes, or when the code screen goes away.
+  useEffect(() => {
+    if (!loginOpen || loginStep !== "verify" || deliveryPollId === 0 || !normalizedEmail) return;
+    let cancelled = false;
+    let timer: number | undefined;
+    let polls = 0;
+    const poll = async () => {
+      timer = undefined;
+      polls += 1;
+      try {
+        const { data } = await apiGet<{ warning?: unknown }>(
+          `/auth/delivery-status?email=${encodeURIComponent(normalizedEmail)}`,
+        );
+        if (cancelled) return;
+        const warning = asDeliveryWarning(data?.warning);
+        if (warning) {
+          setDeliveryWarning(warning);
+          return;
+        }
+      } catch {
+        if (cancelled) return;
+      }
+      if (polls < DELIVERY_STATUS_MAX_POLLS) {
+        timer = window.setTimeout(() => void poll(), DELIVERY_STATUS_POLL_MS);
+      }
+    };
+    timer = window.setTimeout(() => void poll(), DELIVERY_STATUS_POLL_MS);
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [deliveryPollId, loginOpen, loginStep, normalizedEmail]);
+
+  const backToEmailStep = () => {
+    setCode("");
+    resetPasswordFields();
+    setDeliveryWarning(null);
+    setLoginStep("email");
+  };
+
   const resetPasswordFields = () => {
     setPassword("");
     setNewPassword("");
@@ -231,6 +288,7 @@ const Index = () => {
     setCode("");
     resetPasswordFields();
     setCodeAttempts(null);
+    setDeliveryWarning(null);
     setLoginStep("email");
   };
 
@@ -241,6 +299,7 @@ const Index = () => {
     setHasPassword(false);
     setResendCooldownSec(0);
     setCodeAttempts(null);
+    setDeliveryWarning(null);
     setLoginOpen(true);
   };
 
@@ -280,7 +339,13 @@ const Index = () => {
         }
       }
 
-      const result = await apiPost<{ ok?: boolean; error?: string; retryAfterSec?: number; sendNumber?: number }>(
+      const result = await apiPost<{
+        ok?: boolean;
+        error?: string;
+        retryAfterSec?: number;
+        sendNumber?: number;
+        deliveryWarning?: unknown;
+      }>(
         "/auth/send-code",
         sendCodeBody,
       );
@@ -298,6 +363,8 @@ const Index = () => {
       if (data?.ok) {
         setCode("");
         setCodeAttempts(null);
+        setDeliveryWarning(asDeliveryWarning(data.deliveryWarning));
+        setDeliveryPollId((id) => id + 1);
         setLoginStep("verify");
         setResendCooldownSec(retryAfterSec ?? data.retryAfterSec ?? 30);
         toast({
@@ -856,6 +923,14 @@ const Index = () => {
           </form>
         ) : (
           <div className="login-card" style={{ background: "transparent", border: 0, padding: 0, boxShadow: "none" }}>
+            {deliveryWarning ? (
+              <div className="login-delivery-warning" role="alert" data-testid="delivery-warning">
+                <p>{deliveryWarning.message}</p>
+                <button type="button" onClick={backToEmailStep} disabled={loading}>
+                  Изменить почту
+                </button>
+              </div>
+            ) : null}
             <EmailTypoHint
               email={normalizedEmail}
               onApply={applyEmailFixFromCodeStep}
@@ -961,15 +1036,7 @@ const Index = () => {
             </p>
             <p className="form-link">
               Не та почта?{" "}
-              <button
-                type="button"
-                onClick={() => {
-                  setCode("");
-                  resetPasswordFields();
-                  setLoginStep("email");
-                }}
-                disabled={loading}
-              >
+              <button type="button" onClick={backToEmailStep} disabled={loading}>
                 Изменить
               </button>
             </p>

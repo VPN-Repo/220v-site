@@ -153,6 +153,27 @@ describe("mailer provider selection", () => {
     assert.doesNotMatch(JSON.stringify(summary), /backup-pass|primary-pass/);
   });
 
+  it("tags backup mail with the v220 brand in X-UNISENDER-GO; SES mail has no such header", async () => {
+    configureBackup();
+    await sendOtpEmail({ email: "user@example.com", code: "12345" });
+    await sendOtpEmail({ email: "user@example.com", code: "12345", provider: "backup" });
+    await sendOtpEmail({ email: "user@example.com", code: "12345", purpose: "password_change", provider: "backup" });
+    const [primaryMsg, backupMsg, passwordMsg] = sent.map((item) => item.message);
+    assert.equal(primaryMsg.headers["X-UNISENDER-GO"], undefined);
+    for (const message of [backupMsg, passwordMsg]) {
+      assert.deepEqual(JSON.parse(message.headers["X-UNISENDER-GO"]), { global_metadata: { brand: "v220" } });
+      assert.equal(message.headers["Auto-Submitted"], "auto-generated");
+    }
+  });
+
+  it("keeps SES mail untagged when the backup fails over to it", async () => {
+    configureBackup();
+    failingHosts.add(BACKUP);
+    await sendOtpEmail({ email: "user@example.com", code: "12345", provider: "backup" });
+    assert.equal(sent.at(-1).host, PRIMARY);
+    assert.equal(sent.at(-1).message.headers["X-UNISENDER-GO"], undefined);
+  });
+
   it("caches each transport and honours the backup sender overrides", async () => {
     configureBackup({ BACKUP_MAIL_FROM_EMAIL: "otp@example.invalid", BACKUP_MAIL_FROM_NAME: "220v Backup" });
     await sendOtpEmail({ email: "user@example.com", code: "12345", provider: "backup" });

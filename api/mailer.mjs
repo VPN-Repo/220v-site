@@ -20,6 +20,7 @@
 import nodemailer from "nodemailer";
 import { emailHash, maskEmail } from "./auth/crypto.mjs";
 import { logger } from "./logger.mjs";
+import { UNISENDER_HEADER_NAME, UNISENDER_HEADER_VALUE } from "./email/unisenderBrand.mjs";
 
 const HTML_ESCAPES = {
   "&": "&amp;",
@@ -362,17 +363,21 @@ export function buildOtpMessage(code, purpose = "login") {
   return { subject, text, html };
 }
 
-function buildMessage(from, email, subject, text, html) {
+// Backup mail (Unisender Go) carries the brand in X-UNISENDER-GO global_metadata,
+// so this site's webhook can tell its own events apart. SES mail is unchanged.
+function buildMessage(provider, from, email, subject, text, html) {
+  const headers = {
+    "X-Entity-Ref-ID": `otp-${Date.now().toString(36)}`,
+    "Auto-Submitted": "auto-generated",
+  };
+  if (provider === MAIL_PROVIDERS.BACKUP) headers[UNISENDER_HEADER_NAME] = UNISENDER_HEADER_VALUE;
   return {
     from: { name: from.name, address: from.email },
     to: email,
     subject,
     text,
     html,
-    headers: {
-      "X-Entity-Ref-ID": `otp-${Date.now().toString(36)}`,
-      "Auto-Submitted": "auto-generated",
-    },
+    headers,
   };
 }
 
@@ -409,7 +414,7 @@ async function sendViaProvider({ provider, email, recipientDomain, content, maxA
     "mailer sending otp email",
   );
 
-  const message = buildMessage(from, email, content.subject, content.text, content.html);
+  const message = buildMessage(provider, from, email, content.subject, content.text, content.html);
   let lastError = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
