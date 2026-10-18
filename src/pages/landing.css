@@ -4860,6 +4860,39 @@ body.landing-no-scroll { overflow: hidden; }
 .landing-root .login-card .login-support-hint {
   margin-top: 18px;
 }
+.landing-root .login-card .login-typo-hint {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted-2);
+}
+.landing-root .login-card .login-typo-hint b {
+  color: #fff;
+  font-weight: 600;
+  word-break: break-all;
+}
+.landing-root .login-card .login-typo-hint button {
+  margin-left: 2px;
+  padding: 2px 10px;
+  border: 1px solid rgba(198, 255, 61, 0.45);
+  border-radius: 999px;
+  background: rgba(198, 255, 61, 0.08);
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .landing-root .login-card .login-typo-hint button:hover { background: rgba(198, 255, 61, 0.16); }
+}
+@media (pointer: coarse) {
+  .landing-root .login-card .login-typo-hint button { padding: 6px 12px; }
+}
+.landing-root .modal__subtitle .login-sent-email {
+  color: #fff;
+  font-weight: 600;
+  word-break: break-all;
+}
 .landing-root .login-card .login-attempts-hint {
   margin: -4px 0 14px;
   font-size: 13px;

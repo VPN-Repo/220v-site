@@ -44,6 +44,7 @@ import {
   recordOtpMailSend,
   verifyOtp,
 } from "./otp.mjs";
+import { hasLocalPartTypo } from "./emailTypos.mjs";
 import {
   adminSetPasswordSchema,
   emailSchema,
@@ -245,6 +246,11 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
             400,
             "Email не должен содержать плюс в имени",
           );
+        }
+
+        if (hasLocalPartTypo(localPart)) {
+          await recordAuthEvent("send_code_local_typo", req, { email, status: "rejected" });
+          return clientError(res, 400, "Проверьте адрес: похоже, в нём опечатка");
         }
 
         if (!ALLOWED_EMAIL_DOMAINS.has(domain)) {

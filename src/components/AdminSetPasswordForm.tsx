@@ -4,6 +4,7 @@ import { apiBase } from "@/lib/api";
 import { formatUserError } from "@/lib/errorMessages";
 import { Button } from "@/components/ui/button";
 import PasswordVisibilityButton from "@/components/PasswordVisibilityButton";
+import { EmailTypoHint } from "@/components/EmailTypoHint";
 import { isValidNewPassword, PASSWORD_REQUIREMENTS } from "@/lib/password";
 
 const PASSWORD_ALPHABET = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -81,16 +82,25 @@ export default function AdminSetPasswordForm({ token }: { token: string }) {
           if (!loading) void submit();
         }}
       >
-        <input
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="Email пользователя"
-          aria-label="Email пользователя"
-          autoComplete="off"
-          className={inputClass}
-          disabled={loading}
-        />
+        <div>
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="Email пользователя"
+            aria-label="Email пользователя"
+            autoComplete="off"
+            className={inputClass}
+            disabled={loading}
+          />
+          <EmailTypoHint
+            email={email}
+            onApply={setEmail}
+            disabled={loading}
+            className="mt-1.5 text-xs text-muted-foreground"
+            buttonClassName="font-medium text-primary underline-offset-2 hover:underline"
+          />
+        </div>
         <div className="flex gap-2">
           <div className="relative flex-1">
             <input

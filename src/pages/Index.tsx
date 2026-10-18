@@ -26,6 +26,8 @@ import {
 } from "@/lib/vpnStorage";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import PasswordVisibilityButton from "@/components/PasswordVisibilityButton";
+import { EmailTypoHint } from "@/components/EmailTypoHint";
+import { suggestEmailFix } from "@/lib/emailTypos";
 import { isValidNewPassword, PASSWORD_REQUIREMENTS, SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/password";
 
 import LandingShell from "@/pages/landing/LandingShell";
@@ -118,6 +120,10 @@ const Index = () => {
   const [hasPassword, setHasPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loginStep, setLoginStep] = useState<LoginStep>("email");
+  // The typo hint shows after the field loses focus, or after one "Продолжить" press
+  // that was held back so the user sees the hint before a code goes to a wrong address.
+  const [emailBlurred, setEmailBlurred] = useState(false);
+  const [typoHeldFor, setTypoHeldFor] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [pricingOpen, setPricingOpen] = useState(false);
@@ -308,6 +314,11 @@ const Index = () => {
   // по коду.
   const handleStart = async () => {
     if (sendingRef.current) return;
+    // Non-blocking: the first press on a likely typo only reveals the hint, the next one sends.
+    if (suggestEmailFix(email) && typoHeldFor !== email) {
+      setTypoHeldFor(email);
+      return;
+    }
     if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       toast({ title: "Ошибка", description: "Укажите корректный email", variant: "destructive" });
       return;
@@ -708,7 +719,11 @@ const Index = () => {
             ? "Мы отправим код подтверждения на вашу почту"
             : loginStep === "password"
               ? `Пароль для ${normalizedEmail}`
-              : `Код отправлен на ${normalizedEmail}`
+              : (
+                  <>
+                    Код отправлен на <b className="login-sent-email">{normalizedEmail}</b>
+                  </>
+                )
         }
       >
         {loginStep === "email" ? (
@@ -727,12 +742,28 @@ const Index = () => {
                 spellCheck={false}
                 enterKeyHint="send"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setEmailBlurred(false);
+                }}
+                onBlur={() => setEmailBlurred(true)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") void handleStart();
                 }}
                 disabled={loading}
               />
+              {emailBlurred || typoHeldFor === email ? (
+                <EmailTypoHint
+                  email={email}
+                  onApply={(fixed) => {
+                    setEmail(fixed);
+                    setEmailBlurred(false);
+                    setTypoHeldFor(null);
+                  }}
+                  disabled={loading}
+                  className="login-typo-hint"
+                />
+              ) : null}
             </div>
             <div className="form-actions">
               <button
@@ -916,16 +947,19 @@ const Index = () => {
               </button>
             </p>
             <p className="form-link">
+              Не та почта?{" "}
               <button
                 type="button"
                 onClick={() => {
                   setCode("");
                   resetPasswordFields();
+                  setEmailBlurred(false);
+                  setTypoHeldFor(null);
                   setLoginStep("email");
                 }}
                 disabled={loading}
               >
-                ← Изменить email
+                Изменить
               </button>
             </p>
             <p className="login-support-hint">

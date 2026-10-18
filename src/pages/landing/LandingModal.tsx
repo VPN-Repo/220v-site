@@ -6,7 +6,7 @@ type LandingModalProps = {
   open: boolean;
   onClose: () => void;
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   wide?: boolean;
   children: ReactNode;
 };
