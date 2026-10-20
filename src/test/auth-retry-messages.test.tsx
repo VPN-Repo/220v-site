@@ -45,7 +45,7 @@ const toastDescriptions = () => toastMock.mock.calls.map(([arg]) => (arg as { de
 
 describe("auth retry message helpers", () => {
   it("counts down in seconds for the resend cooldown", () => {
-    expect(rateLimitMessage("otp_cooldown", 42)).toBe("Подождите 42 сек. перед повторной отправкой кода");
+    expect(rateLimitMessage("otp_cooldown", 42)).toBe("Повторный код — через 42 сек.");
     expect(formatResendCooldownButtonLabel(41.2)).toBe("Повторная отправка через 42 сек.");
   });
 
@@ -83,7 +83,7 @@ describe("auth retry message helpers", () => {
   it("announces only repeat sends", () => {
     expect(resendNotice(1)).toBe("");
     expect(resendNotice(undefined)).toBe("");
-    expect(resendNotice(2)).toBe("Код отправлен повторно (2-я отправка). Проверьте папку «Спам».");
+    expect(resendNotice(2)).toBe("Повторная отправка №2. Проверьте папку «Спам».");
   });
 });
 
@@ -142,7 +142,7 @@ describe("login retry messages", () => {
     vi.mocked(apiPost).mockImplementation(async (path: string) => {
       if (path === "/auth/method") return ok({ hasPassword: false });
       if (path === "/auth/send-code") return ok({ ok: true, retryAfterSec: 30, sendNumber: 1 });
-      return fail(400, { error: "Неверный код. Осталось попыток: 3 из 5", attempt: 2, attemptsLeft: 3, maxAttempts: 5 });
+      return fail(400, { error: "Код не тот. Попыток осталось: 3 из 5", attempt: 2, attemptsLeft: 3, maxAttempts: 5 });
     });
     await openCodeStep();
     expect(screen.queryByRole("status")).toBeNull();
@@ -150,7 +150,7 @@ describe("login retry messages", () => {
     expect(input).not.toBeNull();
     fireEvent.change(input!, { target: { value: "12345" } });
     fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
-    await waitFor(() => expect(toastDescriptions()).toContain("Неверный код. Осталось попыток: 3 из 5"));
+    await waitFor(() => expect(toastDescriptions()).toContain("Код не тот. Попыток осталось: 3 из 5"));
     expect(screen.getByRole("status")).toHaveTextContent("Попытка 2 из 5 не подошла. Осталось попыток: 3");
   });
 
@@ -162,10 +162,10 @@ describe("login retry messages", () => {
       return ok({ ok: true, retryAfterSec: 1, sendNumber: sends });
     });
     await openCodeStep();
-    expect(toastDescriptions()).toContain("Код подтверждения отправлен на user@gmail.com");
+    expect(toastDescriptions()).toContain("Код уже летит на user@gmail.com");
     fireEvent.click(await screen.findByRole("button", { name: "Отправить код повторно" }, { timeout: 3000 }));
     await waitFor(() =>
-      expect(toastDescriptions()).toContain("Код отправлен повторно (2-я отправка). Проверьте папку «Спам»."),
+      expect(toastDescriptions()).toContain("Повторная отправка №2. Проверьте папку «Спам»."),
     );
   });
 });
@@ -177,13 +177,13 @@ describe("password dialog retry messages", () => {
 
   it("tells when the next code can be requested and holds the resend button", async () => {
     vi.mocked(apiPost).mockResolvedValue(
-      fail(429, { error: "Подождите 45 сек. перед повторной отправкой кода", code: "otp_cooldown", retryAfterSec: 45 }, 45),
+      fail(429, { error: "Повторный код — через 45 сек.", code: "otp_cooldown", retryAfterSec: 45 }, 45),
     );
     render(<PasswordDialog open onOpenChange={vi.fn()} hasPassword={false} onChanged={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Новый пароль"), { target: { value: "abcde1" } });
     fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "abcde1" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
-    await waitFor(() => expect(sonner.error).toHaveBeenCalledWith("Подождите 45 сек. перед повторной отправкой кода"));
+    await waitFor(() => expect(sonner.error).toHaveBeenCalledWith("Повторный код — через 45 сек."));
   });
 
   it("announces a repeat send", async () => {
@@ -193,7 +193,7 @@ describe("password dialog retry messages", () => {
     fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "abcde1" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
     await waitFor(() =>
-      expect(sonner.success).toHaveBeenCalledWith("Код отправлен повторно (3-я отправка). Проверьте папку «Спам»."),
+      expect(sonner.success).toHaveBeenCalledWith("Повторная отправка №3. Проверьте папку «Спам»."),
     );
   });
 });

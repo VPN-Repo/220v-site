@@ -50,7 +50,7 @@ describe("login email typo hint", () => {
     fireEvent.change(input, { target: { value: "ivan@gmial.com" } });
     expect(screen.queryByTestId("email-typo-hint")).not.toBeInTheDocument();
     expect(await screen.findByTestId("email-typo-hint", {}, { timeout: 2000 })).toHaveTextContent(
-      "Возможно, вы имели в виду ivan@gmail.com?",
+      "Похоже на опечатку — может, ivan@gmail.com?",
     );
   });
 
@@ -60,10 +60,10 @@ describe("login email typo hint", () => {
     fireEvent.blur(input);
 
     const hint = screen.getByTestId("email-typo-hint");
-    expect(hint).toHaveTextContent("Возможно, вы имели в виду ivan@gmail.com?");
+    expect(hint).toHaveTextContent("Похоже на опечатку — может, ivan@gmail.com?");
     expect(within(hint).getByText("ivan@gmail.com").tagName).toBe("B");
 
-    fireEvent.click(within(hint).getByRole("button", { name: "Исправить" }));
+    fireEvent.click(within(hint).getByRole("button", { name: "Исправить адрес" }));
     expect(input).toHaveValue("ivan@gmail.com");
     expect(screen.queryByTestId("email-typo-hint")).not.toBeInTheDocument();
 
@@ -77,8 +77,8 @@ describe("login email typo hint", () => {
     fireEvent.blur(input);
 
     const hint = screen.getByTestId("email-typo-hint");
-    expect(hint).toHaveTextContent("Похоже, в адресе опечатка: лишний «-» перед @");
-    fireEvent.click(within(hint).getByRole("button", { name: "Исправить" }));
+    expect(hint).toHaveTextContent("Перед @ лишний «-» — проверьте адрес");
+    fireEvent.click(within(hint).getByRole("button", { name: "Исправить адрес" }));
     expect(input).toHaveValue("ivan@gmail.com");
   });
 
@@ -99,9 +99,9 @@ describe("login email typo hint", () => {
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("ivan-@gmail.com", { selector: "b" })).toBeInTheDocument();
     const hint = within(dialog).getByTestId("email-typo-hint");
-    expect(hint).toHaveTextContent("Похоже, в адресе опечатка: лишний «-» перед @");
+    expect(hint).toHaveTextContent("Перед @ лишний «-» — проверьте адрес");
 
-    fireEvent.click(within(hint).getByRole("button", { name: "Исправить" }));
+    fireEvent.click(within(hint).getByRole("button", { name: "Исправить адрес" }));
     expect(await screen.findByRole("heading", { name: "Вход в 220v" })).toBeInTheDocument();
     expect(screen.getByLabelText("Email")).toHaveValue("ivan@gmail.com");
     expect(sendCodeCalls()).toHaveLength(1);
@@ -124,11 +124,11 @@ describe("login email typo hint", () => {
     expect(await screen.findByRole("heading", { name: "Введите код" })).toBeInTheDocument();
     const dialog = screen.getByRole("dialog");
     const sentTo = within(dialog).getByText("ivan@gmail.com", { selector: "b" });
-    expect(sentTo.closest("p")).toHaveTextContent("Код отправлен на ivan@gmail.com");
-    expect(within(dialog).getByText(/Не та почта\?/)).toBeInTheDocument();
+    expect(sentTo.closest("p")).toHaveTextContent("Код уже летит на ivan@gmail.com");
+    expect(within(dialog).getByText(/Ошиблись почтой\?/)).toBeInTheDocument();
     expect(within(dialog).queryByTestId("email-typo-hint")).not.toBeInTheDocument();
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Изменить" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Исправить" }));
     expect(await screen.findByRole("heading", { name: "Вход в 220v" })).toBeInTheDocument();
     expect(screen.getByLabelText("Email")).toHaveValue("ivan@gmail.com");
   });
@@ -139,7 +139,7 @@ describe("admin set-password email typo hint", () => {
     render(<AdminSetPasswordForm token="t" />);
     const input = screen.getByLabelText("Email пользователя");
     fireEvent.change(input, { target: { value: "user@gmail.ru" } });
-    fireEvent.click(screen.getByRole("button", { name: "Исправить" }));
+    fireEvent.click(screen.getByRole("button", { name: "Исправить адрес" }));
     expect(input).toHaveValue("user@gmail.com");
     expect(screen.queryByTestId("email-typo-hint")).not.toBeInTheDocument();
   });

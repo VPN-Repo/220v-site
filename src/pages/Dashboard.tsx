@@ -1176,7 +1176,7 @@ const Dashboard = () => {
           )}
 
           <div className="dash-modal__danger-zone">
-            <p className="dash-modal__danger-hint">Если ссылку узнали посторонние</p>
+            <p className="dash-modal__danger-hint">Ссылка попала к чужим?</p>
             <button
               type="button"
               className="dash-modal-btn dash-modal-btn--danger-outline"
@@ -1536,7 +1536,7 @@ const Dashboard = () => {
                 </li>
                 <li>Мощное шифрование и полная защита от утечек данных.</li>
                 <li>Никакого спама, баннеров и слежки — только чистый интернет.</li>
-                <li>Команда заботы на связи ежедневно с 05:00 до 01:00 по МСК.</li>
+                <li>Работаем ежедневно: 05:00–01:00 МСК</li>
               </ul>
             </div>
             <div className="dash-modal__stack" style={{ marginTop: 22 }}>

@@ -112,7 +112,7 @@ describe("auth retry messages", () => {
     assert.equal(res.status, 429);
     assert.equal(res.body.code, "otp_cooldown");
     assert.equal(res.body.retryAfterSec, 37);
-    assert.equal(res.body.error, "Подождите 37 сек. перед повторной отправкой кода");
+    assert.equal(res.body.error, "Повторный код — через 37 сек.");
     assert.equal(res.headers["retry-after"], "37");
     assert.equal(sentCodes.length, 1);
   });
@@ -140,7 +140,7 @@ describe("auth retry messages", () => {
     assert.equal(res.status, 429);
     assert.equal(res.body.code, "otp_cooldown");
     assert.equal(res.body.retryAfterSec, 21);
-    assert.equal(res.body.error, "Подождите 21 сек. перед повторной отправкой кода");
+    assert.equal(res.body.error, "Повторный код — через 21 сек.");
   });
 
   it("a wrong code returns the attempt number and the attempts left", async () => {
@@ -155,7 +155,7 @@ describe("auth retry messages", () => {
     assert.equal(first.body.attempt, 1);
     assert.equal(first.body.attemptsLeft, OTP_MAX_TRIES - 1);
     assert.equal(first.body.maxAttempts, OTP_MAX_TRIES);
-    assert.equal(first.body.error, `Неверный код. Осталось попыток: ${OTP_MAX_TRIES - 1} из ${OTP_MAX_TRIES}`);
+    assert.equal(first.body.error, `Код не тот. Попыток осталось: ${OTP_MAX_TRIES - 1} из ${OTP_MAX_TRIES}`);
     for (let i = 2; i < OTP_MAX_TRIES; i += 1) {
       const next = await verify();
       assert.equal(next.body.attempt, i);

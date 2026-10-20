@@ -19,7 +19,7 @@ type Props = {
   onRevoked: (result: { user: unknown; subscriptionUrl: string }) => void | Promise<void>;
 };
 
-export const REVOKE_ACTION_LABEL = "Сбросить ссылку подключения";
+export const REVOKE_ACTION_LABEL = "Выпустить новую ссылку";
 
 /**
  * Выпуск новой ссылки подключения: старая перестаёт работать на всех устройствах.
@@ -58,7 +58,7 @@ export default function RevokeSubscriptionDialog({ open, onOpenChange, onRevoked
       setNewUrl(url);
       setNotice(url ? "" : data?.message || "Ссылка сброшена. Обновите страницу, чтобы увидеть новую ссылку.");
       setDone(true);
-      toast.success("Ссылка подключения сброшена", {
+      toast.success("Новая ссылка готова ⚡", {
         description: "Старая ссылка больше не работает. Подключите устройства по новой.",
       });
       try {
@@ -87,7 +87,7 @@ export default function RevokeSubscriptionDialog({ open, onOpenChange, onRevoked
       <DialogContent
         className="dash-modal max-h-[85dvh] overflow-y-auto sm:max-w-md"
         onOpenAutoFocus={(event) => {
-          // Безопасный выбор по умолчанию: фокус на «Отмена», а не на сбросе.
+          // Безопасный выбор по умолчанию: фокус на «Оставить как есть», а не на сбросе.
           if (!cancelButtonRef.current) return;
           event.preventDefault();
           cancelButtonRef.current.focus();
@@ -96,7 +96,7 @@ export default function RevokeSubscriptionDialog({ open, onOpenChange, onRevoked
         {done ? (
           <>
             <DialogHeader>
-              <DialogTitle>Ссылка сброшена</DialogTitle>
+              <DialogTitle>Новая ссылка готова ⚡</DialogTitle>
               <DialogDescription>
                 Старая ссылка больше не работает. Вставьте новую ссылку в приложение на каждом устройстве.
               </DialogDescription>
@@ -139,13 +139,13 @@ export default function RevokeSubscriptionDialog({ open, onOpenChange, onRevoked
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>Сбросить ссылку подключения?</DialogTitle>
+              <DialogTitle>Выпустить новую ссылку?</DialogTitle>
               <DialogDescription asChild>
                 <div>
-                  <p className="dash-modal__warning">Подключение сразу перестанет работать на всех ваших устройствах.</p>
+                  <p className="dash-modal__warning">Все ваши устройства сразу потеряют соединение.</p>
                   <p>
-                    Нужно это, только если ссылку узнали посторонние. Если подключение просто плохо работает — сбрасывать не
-                    нужно, напишите в поддержку.
+                    Делайте это, только если ссылка попала к чужим. Плохо работает связь — пишите в поддержку, новая ссылка
+                    тут не поможет.
                   </p>
                 </div>
               </DialogDescription>
@@ -169,7 +169,7 @@ export default function RevokeSubscriptionDialog({ open, onOpenChange, onRevoked
                 disabled={loading}
                 onClick={() => close(false)}
               >
-                Отмена
+                Оставить как есть
               </button>
               <button
                 type="button"
@@ -178,7 +178,7 @@ export default function RevokeSubscriptionDialog({ open, onOpenChange, onRevoked
                 onClick={() => void revoke()}
               >
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" /> : null}
-                {loading ? "Сбрасываем..." : "Да, сбросить ссылку"}
+                {loading ? "Сбрасываем..." : "Выпустить новую"}
               </button>
             </div>
           </>

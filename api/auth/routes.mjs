@@ -399,7 +399,7 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
           return clientError(
             res,
             otpResult.status,
-            `Неверный код. Осталось попыток: ${attemptsLeft} из ${OTP_MAX_TRIES}`,
+            `Код не тот. Попыток осталось: ${attemptsLeft} из ${OTP_MAX_TRIES}`,
             { attempt: otpResult.tries, attemptsLeft, maxAttempts: OTP_MAX_TRIES },
           );
         }

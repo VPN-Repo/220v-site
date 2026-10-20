@@ -21,7 +21,7 @@ export function formatWaitTime(seconds) {
 }
 
 export function formatOtpResendCooldownMessage(retryAfterSec) {
-  return `Подождите ${formatWaitTime(retryAfterSec)} перед повторной отправкой кода`;
+  return `Повторный код — через ${formatWaitTime(retryAfterSec)}`;
 }
 
 /**

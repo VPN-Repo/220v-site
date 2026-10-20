@@ -63,7 +63,7 @@ const Support = () => {
                     </div>
                     <div className="support-meta__item">
                       <span className="support-meta__label">Время работы</span>
-                      <span className="support-meta__value">с 05:00 до 01:00 ежедневно по МСК</span>
+                      <span className="support-meta__value">Работаем ежедневно: 05:00–01:00 МСК</span>
                     </div>
                   </div>
 

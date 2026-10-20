@@ -833,7 +833,7 @@ const Chat = () => {
                     {statusLabel ? <span className="support2-chat__badge">{statusLabel}</span> : null}
                   </div>
                 </div>
-                <p className="support2-chat__hours">Время работы: с 05:00 до 01:00 ежедневно по МСК</p>
+                <p className="support2-chat__hours">Работаем ежедневно: 05:00–01:00 МСК</p>
 
                 {error ? (
                   <div className="support2-chat__error" role="alert">

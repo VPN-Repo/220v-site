@@ -69,5 +69,5 @@ export function codeAttemptsHint({ attempt, attemptsLeft, maxAttempts }: CodeAtt
 export function resendNotice(sendNumber: unknown): string {
   const n = Number(sendNumber);
   if (!Number.isInteger(n) || n < 2) return "";
-  return `Код отправлен повторно (${n}-я отправка). Проверьте папку «Спам».`;
+  return `Повторная отправка №${n}. Проверьте папку «Спам».`;
 }

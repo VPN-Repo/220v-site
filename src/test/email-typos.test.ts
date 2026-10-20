@@ -120,9 +120,9 @@ describe("checkEmailTypo", () => {
     expect(checkEmailTypo("ivan-@gmail.com")).toEqual({
       suggestion: "ivan@gmail.com",
       domainChanged: false,
-      localIssues: ["лишний «-» перед @"],
+      localIssues: ["перед @ лишний «-»"],
     });
-    expect(checkEmailTypo("ivan._@mail.ru")?.localIssues).toEqual(["лишние «._» перед @"]);
+    expect(checkEmailTypo("ivan._@mail.ru")?.localIssues).toEqual(["перед @ лишние «._»"]);
     expect(checkEmailTypo(".ivan@mail.ru")?.localIssues).toEqual(["лишняя точка в начале"]);
     expect(checkEmailTypo("iv..an@mail.ru")?.localIssues).toEqual(["две точки подряд"]);
     expect(checkEmailTypo("ivan petrov@mail.ru")?.localIssues).toEqual(["пробел в адресе"]);
@@ -134,7 +134,7 @@ describe("checkEmailTypo", () => {
       domainChanged: true,
       localIssues: [],
     });
-    expect(checkEmailTypo("ivan-@mail.ry")).toMatchObject({ domainChanged: true, localIssues: ["лишний «-» перед @"] });
+    expect(checkEmailTypo("ivan-@mail.ry")).toMatchObject({ domainChanged: true, localIssues: ["перед @ лишний «-»"] });
   });
 
   it("returns null for valid addresses", () => {
