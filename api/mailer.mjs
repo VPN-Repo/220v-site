@@ -256,7 +256,7 @@ export function buildOtpMessage(code, purpose = "login") {
         footer: "Не запрашивали вход? Просто проигнорируйте это письмо.",
       };
   const text = [
-    "220v · безопасный VPN",
+    "220v · защищённое соединение",
     "",
     copy.requested,
     "",
@@ -294,7 +294,7 @@ export function buildOtpMessage(code, purpose = "login") {
                   220<span style="color:#c6ff3d;">v</span>
                 </div>
                 <div style="margin-top:10px;font-size:14px;font-weight:500;color:#9a9a9a;line-height:1.5;">
-                  Безопасный VPN · личный кабинет
+                  Защищённое соединение · личный кабинет
                 </div>
               </td>
             </tr>

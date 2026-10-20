@@ -142,9 +142,9 @@ export default function RevokeSubscriptionDialog({ open, onOpenChange, onRevoked
               <DialogTitle>Сбросить ссылку подключения?</DialogTitle>
               <DialogDescription asChild>
                 <div>
-                  <p className="dash-modal__warning">VPN сразу перестанет работать на всех ваших устройствах.</p>
+                  <p className="dash-modal__warning">Подключение сразу перестанет работать на всех ваших устройствах.</p>
                   <p>
-                    Нужно это, только если ссылку узнали посторонние. Если VPN просто плохо работает — сбрасывать не
+                    Нужно это, только если ссылку узнали посторонние. Если подключение просто плохо работает — сбрасывать не
                     нужно, напишите в поддержку.
                   </p>
                 </div>

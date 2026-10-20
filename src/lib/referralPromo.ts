@@ -98,8 +98,8 @@ export function buildReferralLink(origin: string, userUuid: string | null | unde
   return `${origin}/?ref=${encodeURIComponent(uuid)}`;
 }
 
-export const REFERRAL_SHARE_INTRO = "Пользуюсь 220 Вольт — всё работает быстро и стабильно.";
-const REFERRAL_SHARE_LEAD = `${REFERRAL_SHARE_INTRO} Попробуй по моей ссылке:`;
+export const REFERRAL_SHARE_INTRO = "Подключился к 220 Вольт — соединение держит как надо ⚡";
+const REFERRAL_SHARE_LEAD = `${REFERRAL_SHARE_INTRO} Заходи по моей ссылке:`;
 
 /** Ready-to-send message with the link at the end. */
 export function referralShareText(link: string): string {

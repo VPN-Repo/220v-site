@@ -20,7 +20,7 @@ describe("revoke subscription dialog", () => {
     render(<RevokeSubscriptionDialog open onOpenChange={vi.fn()} onRevoked={vi.fn()} />);
 
     expect(screen.getByRole("heading", { name: "Сбросить ссылку подключения?" })).toBeInTheDocument();
-    const warning = screen.getByText("VPN сразу перестанет работать на всех ваших устройствах.");
+    const warning = screen.getByText("Подключение сразу перестанет работать на всех ваших устройствах.");
     expect(warning).toHaveClass("dash-modal__warning");
     expect(screen.getByText(/только если ссылку узнали посторонние/)).toBeInTheDocument();
     expect(screen.getByText(/сбрасывать не нужно, напишите в поддержку/)).toBeInTheDocument();

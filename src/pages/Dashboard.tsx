@@ -1493,11 +1493,11 @@ const Dashboard = () => {
           <DialogHeader>
             <DialogTitle>О нас</DialogTitle>
             <DialogDescription className="sr-only">
-              220v — быстрый и безопасный VPN. Условия, скорость, безопасность сервиса.
+              220v — быстрое и защищённое соединение. Условия, скорость, безопасность сервиса.
             </DialogDescription>
           </DialogHeader>
           <div>
-            <p className="dash-modal__lead">220v — быстрый и безопасный VPN</p>
+            <p className="dash-modal__lead">220v — быстрое и защищённое соединение</p>
 
             <div className="dash-modal__section">
               <p className="dash-modal__section-title">📋 Условия и возможности</p>

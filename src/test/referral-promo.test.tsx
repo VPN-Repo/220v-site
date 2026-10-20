@@ -99,7 +99,7 @@ describe("referral promo helpers", () => {
     expect(buildReferralLink("https://220v.test", "uuid-123")).toBe(LINK);
     expect(buildReferralLink("https://220v.test", null)).toBe("");
     expect(referralShareText(LINK)).toBe(
-      `Пользуюсь 220 Вольт — всё работает быстро и стабильно. Попробуй по моей ссылке: ${LINK}`,
+      `Подключился к 220 Вольт — соединение держит как надо ⚡ Заходи по моей ссылке: ${LINK}`,
     );
   });
 
@@ -112,7 +112,7 @@ describe("referral promo helpers", () => {
     const targets = Object.fromEntries(referralShareTargets(LINK).map((t) => [t.key, new URL(t.href)]));
     expect(targets.telegram.origin + targets.telegram.pathname).toBe("https://t.me/share/url");
     expect(targets.telegram.searchParams.get("url")).toBe(LINK);
-    expect(targets.telegram.searchParams.get("text")).toContain("Пользуюсь 220 Вольт — всё работает");
+    expect(targets.telegram.searchParams.get("text")).toContain("Подключился к 220 Вольт");
     expect(targets.whatsapp.origin).toBe("https://wa.me");
     expect(targets.whatsapp.searchParams.get("text")).toBe(referralShareText(LINK));
     expect(targets.vk.origin + targets.vk.pathname).toBe("https://vk.com/share.php");
