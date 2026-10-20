@@ -19,11 +19,11 @@ vi.mock("react-router-dom", async (importOriginal) => {
 
 const MAILBOX_FULL = {
   category: "mailbox_full",
-  message: "Ваш почтовый ящик переполнен. Освободите место и запросите код снова.",
+  message: "Ящик забит под завязку — освободите место и запросите код заново.",
 };
 const INVALID = {
   category: "invalid_address",
-  message: "Такого адреса не существует. Проверьте, нет ли опечатки в email.",
+  message: "Почтовый ящик не найден. Проверьте адрес на опечатки.",
 };
 
 let deliveryStatusWarning: typeof INVALID | null = null;
