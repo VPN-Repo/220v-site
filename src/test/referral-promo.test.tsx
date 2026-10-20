@@ -280,6 +280,9 @@ describe("pay success referral card", () => {
     mockConfig(CONFIG);
     renderPaySuccess();
     const card = await screen.findByTestId("pay-success-referral");
+    expect(PAY_SUCCESS_REFERRAL_TITLE).toBe(
+      "Довольны соединением? Делитесь ссылкой — баллы за каждую подписку, которую оплатит друг",
+    );
     expect(within(card).getByRole("heading", { name: PAY_SUCCESS_REFERRAL_TITLE })).toBeInTheDocument();
     expect(within(card).getByRole("button", { name: "Скопировать ссылку" })).toBeInTheDocument();
     expect(within(card).getByRole("button", { name: "Поделиться" })).toBeInTheDocument();

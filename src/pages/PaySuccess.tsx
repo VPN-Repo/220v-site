@@ -9,7 +9,7 @@ import ReferralShare from "@/components/ReferralShare";
 import { useSession } from "@/hooks/useSession";
 import { buildReferralLink, useReferralConfig } from "@/lib/referralPromo";
 
-export const PAY_SUCCESS_REFERRAL_TITLE = "Довольны соединением? Делитесь ссылкой — за каждую оплату друга начислим баллы";
+export const PAY_SUCCESS_REFERRAL_TITLE = "Довольны соединением? Делитесь ссылкой — баллы за каждую подписку, которую оплатит друг";
 
 /** Referral invite under the payment confirmation; only for a signed-in user the program is open to. */
 const PaySuccessReferral = () => {
