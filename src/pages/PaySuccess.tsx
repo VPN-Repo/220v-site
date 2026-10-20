@@ -1,10 +1,41 @@
 import { useNavigate } from "react-router-dom";
-import { BookOpen, CheckCircle2 } from "lucide-react";
+import { BookOpen, CheckCircle2, Gift } from "lucide-react";
 
 import successMascot from "@/assets/pay-success-mascot.png";
 import LandingFooter from "@/pages/landing/LandingFooter";
 import LandingHeader from "@/pages/landing/LandingHeader";
 import LandingShell from "@/pages/landing/LandingShell";
+import ReferralShare from "@/components/ReferralShare";
+import { useSession } from "@/hooks/useSession";
+import { buildReferralLink, useReferralConfig } from "@/lib/referralPromo";
+
+export const PAY_SUCCESS_REFERRAL_TITLE = "Понравилось? Пригласите друга — баллы за каждую его оплату подписки";
+
+/** Referral invite under the payment confirmation; only for a signed-in user the program is open to. */
+const PaySuccessReferral = () => {
+  const navigate = useNavigate();
+  const { status, user } = useSession();
+  const link =
+    typeof window !== "undefined" ? buildReferralLink(window.location.origin, user?.userUuid) : "";
+  const { config } = useReferralConfig(status === "authed" && Boolean(link));
+
+  if (!link || !config?.available) return null;
+
+  return (
+    <section className="pay-success__ref" aria-labelledby="pay-success-ref-title" data-testid="pay-success-referral">
+      <div className="pay-success__ref-head">
+        <span className="pay-success__ref-icon" aria-hidden="true">
+          <Gift className="h-5 w-5" />
+        </span>
+        <h2 id="pay-success-ref-title">{PAY_SUCCESS_REFERRAL_TITLE}</h2>
+      </div>
+      <ReferralShare link={link} />
+      <button type="button" className="pay-success__ref-more" onClick={() => navigate("/referrals")}>
+        Как работает программа
+      </button>
+    </section>
+  );
+};
 
 const PaySuccess = () => {
   const navigate = useNavigate();
@@ -70,6 +101,8 @@ const PaySuccess = () => {
                   Инструкции
                 </button>
               </div>
+
+              <PaySuccessReferral />
             </article>
           </div>
         </section>

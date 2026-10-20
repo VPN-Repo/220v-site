@@ -1,12 +1,21 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { ArrowRight, Coins, Copy, Gift, Loader2, UserPlus } from "lucide-react";
+import { ArrowRight, Coins, Gift, Loader2, Share2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { apiGet, apiPost } from "@/lib/api";
-import { copyText } from "@/lib/clipboard";
 import { getReferralsProgramStarted, setReferralsProgramStarted } from "@/lib/referralsStorage";
 import DashboardSidebar from "@/components/DashboardSidebar";
+import ReferralShare from "@/components/ReferralShare";
+import {
+  buildReferralLink,
+  maxFirstPaymentPoints,
+  pluralPoints,
+  repeatTierPoints,
+  tierPoints,
+  useReferralConfig,
+  type ReferralConfig,
+} from "@/lib/referralPromo";
 import { useDashboardSidebarItems } from "@/hooks/useDashboardSidebarItems";
 import LandingShell from "@/pages/landing/LandingShell";
 import LandingFooter from "@/pages/landing/LandingFooter";
@@ -75,7 +84,6 @@ type CreateReferralExchangeRequestResponse = {
 };
 
 const PAGE_SIZE = 20;
-const POINTS_PER_DAY = 10;
 const REFERRAL_EXCHANGE_BLOCKED_MESSAGE =
   "Списание/обмен баллов недоступны. Обратитесь в техническую поддержку.";
 const REFERRAL_POINTS_BLOCKED_MESSAGE =
@@ -102,26 +110,45 @@ const PRIZE_OPTIONS = [
   },
 ] as const;
 
-const FLOW_STEPS = [
-  {
-    num: 1,
-    Icon: UserPlus,
-    title: "Приглашай друзей",
-    desc: "Поделись своей уникальной реферальной ссылкой с друзьями, коллегами и подписчиками",
-  },
-  {
-    num: 2,
-    Icon: Coins,
-    title: "Зарабатывай баллы",
-    desc: "+1 балл за регистрацию и до +1200 баллов за первую оплату тарифа приглашённым другом",
-  },
-  {
-    num: 3,
-    Icon: Gift,
-    title: "Получай дни или призы",
-    desc: "Обменивай накопленные баллы на дополнительные дни подписки или ценные награды",
-  },
+const PAYMENT_TIERS = [
+  { tier: "1m", label: "тариф на 1 месяц" },
+  { tier: "6m", label: "тариф на 6 месяцев" },
+  { tier: "12m", label: "тариф на 12 месяцев" },
 ] as const;
+
+const points = (n: number) => `${n} ${pluralPoints(n)}`;
+
+/** The "how it works" steps; numbers come from the API config and are omitted when it is unavailable. */
+function flowSteps(config: ReferralConfig | null) {
+  const maxPoints = maxFirstPaymentPoints(config);
+  const registration = config?.registrationPoints;
+  const earnParts = [
+    registration ? `+${points(registration)} за регистрацию` : null,
+    maxPoints ? `до +${points(maxPoints)} за первую оплату тарифа приглашённым другом` : null,
+  ].filter(Boolean);
+  return [
+    {
+      num: 1,
+      Icon: UserPlus,
+      title: "Приглашай друзей",
+      desc: "Поделись своей уникальной реферальной ссылкой с друзьями, коллегами и подписчиками",
+    },
+    {
+      num: 2,
+      Icon: Coins,
+      title: "Зарабатывай баллы",
+      desc: earnParts.length
+        ? earnParts.join(" и ")
+        : "Баллы начисляются за регистрацию и оплаты тарифа приглашённым другом",
+    },
+    {
+      num: 3,
+      Icon: Gift,
+      title: "Получай дни или призы",
+      desc: "Обменивай накопленные баллы на дополнительные дни подписки или ценные награды",
+    },
+  ];
+}
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
@@ -218,14 +245,13 @@ const Referrals = () => {
   const [prizeError, setPrizeError] = useState("");
   const [programStarted, setProgramStarted] = useState(false);
   const [startedReady, setStartedReady] = useState(false);
-  const copyButtonRef = useRef<HTMLButtonElement>(null);
+  const { config: referralConfig, loaded: referralConfigLoaded } = useReferralConfig();
+  const pointsPerDay = referralConfig?.pointsPerDay ?? null;
 
   const referrerEligible = backendEligibility?.active;
 
   const referralLink =
-    typeof window !== "undefined" && userUuid
-      ? `${window.location.origin}/?ref=${encodeURIComponent(userUuid)}`
-      : "";
+    typeof window !== "undefined" ? buildReferralLink(window.location.origin, userUuid) : "";
 
   const fetchHistory = useCallback(async (pageNum: number) => {
     setLoading(true);
@@ -295,26 +321,6 @@ const Referrals = () => {
     setProgramStarted(true);
   };
 
-  const handleCopyLink = () => {
-    if (!referralLink) {
-      toast.error("Реферальная ссылка недоступна");
-      return;
-    }
-
-    void copyText(referralLink, copyButtonRef.current).then((ok) => {
-      if (ok) {
-        toast.success("Ссылка скопирована!", {
-          style: { background: "#0a0a0a", color: "#fff", border: "1px solid #22c55e" },
-        });
-      } else {
-        toast.error("Не удалось скопировать. Скопируйте вручную:", {
-          description: referralLink,
-          duration: 8000,
-        });
-      }
-    });
-  };
-
   const updateReferralBlockedStatus = useCallback((data: ReferralStatusResponse) => {
     setReferralPointsBlocked(data.pointsBlocked === true || data.status?.pointsBlocked === true);
   }, []);
@@ -331,7 +337,7 @@ const Referrals = () => {
   }, [updateReferralBlockedStatus]);
 
   const exchangeDays = Math.max(0, Number.parseInt(daysToExchange, 10) || 0);
-  const exchangeDaysCost = exchangeDays * POINTS_PER_DAY;
+  const exchangeDaysCost = pointsPerDay ? exchangeDays * pointsPerDay : 0;
   const selectedPrize = PRIZE_OPTIONS.find((prize) => prize.id === selectedPrizeId) ?? null;
 
   const showExchangeBlockedDialog = useCallback(() => {
@@ -388,6 +394,10 @@ const Referrals = () => {
   );
 
   const handleOpenDaysExchange = async () => {
+    if (!pointsPerDay) {
+      toast.error("Не удалось загрузить условия обмена — обновите страницу");
+      return;
+    }
     if (await checkReferralExchangeAllowed()) {
       setDaysExchangeOpen(true);
     }
@@ -403,7 +413,7 @@ const Referrals = () => {
   };
 
   const handleExchangeDays = async () => {
-    if (exchangeDays <= 0) {
+    if (exchangeDays <= 0 || !pointsPerDay) {
       toast.error("Укажите количество дней для обмена");
       return;
     }
@@ -491,6 +501,10 @@ const Referrals = () => {
 
   const showPageLoader = userLoading || !startedReady;
   const showDetailsLoader = programStarted && loading && historyItems.length === 0 && !error;
+  // The share block leads the page; it is hidden only when accrual is blocked for this user.
+  const shareAvailable = referralConfigLoaded && (referralConfig ? referralConfig.available : !referralPointsBlocked);
+  const steps = flowSteps(referralConfig);
+  const maxPoints = maxFirstPaymentPoints(referralConfig);
 
   return (
     <LandingShell className="landing-root--with-sidebar landing-root--referrals">
@@ -514,6 +528,25 @@ const Referrals = () => {
                 </p>
               </div>
             </header>
+
+            {!showPageLoader && referralLink && shareAvailable ? (
+              <section className="dash-card ref-share-card" aria-labelledby="ref-share-title">
+                <header className="dash-card__head">
+                  <div className="dash-card__icon" aria-hidden="true">
+                    <Share2 className="h-5 w-5" />
+                  </div>
+                  <div className="dash-card__head-text">
+                    <h2 className="dash-card__title" id="ref-share-title">Ваша ссылка для друзей</h2>
+                    <div className="dash-card__desc">
+                      {maxPoints
+                        ? `Отправьте её другу — до ${points(maxPoints)} за его первую оплату и баллы за следующие`
+                        : "Отправьте её другу и получайте баллы за его оплаты"}
+                    </div>
+                  </div>
+                </header>
+                <ReferralShare link={referralLink} showLink />
+              </section>
+            ) : null}
 
             {programStarted && referrerEligible === false && !showPageLoader && (
               <div className="mb-6 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -551,7 +584,7 @@ const Referrals = () => {
                 {!programStarted ? (
                   <>
                     <section className="dash-referrals-flow" aria-label="Как работает программа">
-                      {FLOW_STEPS.map((step, idx) => (
+                      {steps.map((step, idx) => (
                         <Fragment key={step.num}>
                           <article className="dash-referrals-flow__step">
                             <span className="dash-referrals-flow__num">0{step.num}</span>
@@ -561,7 +594,7 @@ const Referrals = () => {
                             <h2 className="dash-referrals-flow__title">{step.title}</h2>
                             <p className="dash-referrals-flow__desc">{step.desc}</p>
                           </article>
-                          {idx < FLOW_STEPS.length - 1 ? (
+                          {idx < steps.length - 1 ? (
                             <span className="dash-referrals-flow__arrow" aria-hidden="true">
                               <ArrowRight className="h-5 w-5" />
                             </span>
@@ -589,7 +622,7 @@ const Referrals = () => {
                   </div>
                 ) : (
                   <>
-                    <div className="dash-grid">
+                    <div className="dash-grid dash-grid--two">
                   <section className="dash-card">
                     <header className="dash-card__head">
                       <div className="dash-card__icon" aria-hidden="true">
@@ -607,8 +640,18 @@ const Referrals = () => {
                         <span className="dash-metric__value">{balance}</span>
                       </div>
                       <p className="dash-card__hint">
-                        За регистрацию реферала — <strong>1</strong> балл. За первую оплату тарифа —
-                        до <strong>1200</strong> баллов в зависимости от срока.{" "}
+                        {referralConfig?.registrationPoints ? (
+                          <>
+                            За регистрацию реферала — <strong>{referralConfig.registrationPoints}</strong>{" "}
+                            {pluralPoints(referralConfig.registrationPoints)}.{" "}
+                          </>
+                        ) : null}
+                        {maxPoints ? (
+                          <>
+                            За первую оплату тарифа — до <strong>{maxPoints}</strong> {pluralPoints(maxPoints)} в
+                            зависимости от срока.{" "}
+                          </>
+                        ) : null}
                         <button
                           type="button"
                           className="dash-referrals-more-link"
@@ -617,32 +660,6 @@ const Referrals = () => {
                           Подробнее
                         </button>
                       </p>
-                    </div>
-                  </section>
-
-                  <section className="dash-card">
-                    <header className="dash-card__head">
-                      <div className="dash-card__icon" aria-hidden="true">
-                        <Copy className="h-5 w-5" />
-                      </div>
-                      <div className="dash-card__head-text">
-                        <div className="dash-card__title">Ваша реф. ссылка</div>
-                        <div className="dash-card__desc">Поделитесь ссылкой с друзьями и коллегами</div>
-                      </div>
-                    </header>
-                    <div className="dash-card__body">
-                      <div className="dash-referrals-rewards dash-referrals-rewards--single">
-                        <button
-                          ref={copyButtonRef}
-                          type="button"
-                          onClick={handleCopyLink}
-                          disabled={!referralLink}
-                          className="dash-referrals-rewards__btn"
-                        >
-                          Скопировать
-                        </button>
-                      </div>
-                      <p className="dash-referrals-rewards__hint">(нажмите, чтобы скопировать)</p>
                     </div>
                   </section>
 
@@ -678,7 +695,7 @@ const Referrals = () => {
                         </button>
                       </div>
                       <p className="dash-referrals-rewards__hint">
-                        10 баллов = 1 день. Призы можно выбрать из списка.
+                        {pointsPerDay ? `${points(pointsPerDay)} = 1 день. ` : ""}Призы можно выбрать из списка.
                       </p>
                     </div>
                   </section>
@@ -818,31 +835,45 @@ const Referrals = () => {
             <p className="dash-modal__section-title">Регистрация</p>
             <ul className="dash-modal__list">
               <li>
-                <strong>+1 балл</strong> — когда приглашённый пользователь впервые регистрируется по вашей
-                ссылке
+                {referralConfig?.registrationPoints ? (
+                  <strong>+{points(referralConfig.registrationPoints)}</strong>
+                ) : (
+                  "Баллы"
+                )}{" "}
+                — когда приглашённый пользователь впервые регистрируется по вашей ссылке
               </li>
             </ul>
           </div>
           <div className="dash-modal__section">
             <p className="dash-modal__section-title">Первая оплата тарифа рефералом</p>
             <ul className="dash-modal__list">
-              <li>
-                <strong>+100 баллов</strong> — тариф на 1 месяц
-              </li>
-              <li>
-                <strong>+600 баллов</strong> — тариф на 6 месяцев
-              </li>
-              <li>
-                <strong>+1200 баллов</strong> — тариф на 12 месяцев
-              </li>
+              {PAYMENT_TIERS.map(({ tier, label }) => {
+                const value = tierPoints(referralConfig, tier);
+                return value ? (
+                  <li key={tier}>
+                    <strong>+{points(value)}</strong> — {label}
+                  </li>
+                ) : null;
+              })}
             </ul>
           </div>
           <div className="dash-modal__section">
             <p className="dash-modal__section-title">Повторные оплаты</p>
             <ul className="dash-modal__list">
               <li>
-                При каждой следующей оплате тарифа тем же рефералом начисляется <strong>10%</strong> от
-                баллов первой оплаты соответствующего срока (10 / 60 / 120 баллов)
+                При каждой следующей оплате тарифа тем же рефералом начисляется{" "}
+                {referralConfig?.repeatPaymentPercent ? (
+                  <strong>{referralConfig.repeatPaymentPercent}%</strong>
+                ) : (
+                  "часть"
+                )}{" "}
+                от баллов первой оплаты соответствующего срока
+                {(() => {
+                  const repeats = PAYMENT_TIERS.map(({ tier }) => repeatTierPoints(referralConfig, tier));
+                  return repeats.every((value) => value)
+                    ? ` (${repeats.join(" / ")} ${pluralPoints(repeats[repeats.length - 1] as number)})`
+                    : "";
+                })()}
               </li>
             </ul>
           </div>
@@ -873,7 +904,11 @@ const Referrals = () => {
           <DialogHeader>
             <DialogTitle>Обмен баллов на дни</DialogTitle>
             <DialogDescription>
-              Курс обмена: <span className="dash-modal__desc-accent">10 баллов = 1 день</span>.
+              {pointsPerDay ? (
+                <>
+                  Курс обмена: <span className="dash-modal__desc-accent">{points(pointsPerDay)} = 1 день</span>.{" "}
+                </>
+              ) : null}
               Сейчас доступно {balance} баллов.
             </DialogDescription>
           </DialogHeader>

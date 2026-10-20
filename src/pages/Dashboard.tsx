@@ -53,6 +53,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { oneClickHappUrl, isInstructionsPlatform, type InstructionsPlatform } from "@/lib/happ";
 import LandingShell from "@/pages/landing/LandingShell";
 import LandingFooter from "@/pages/landing/LandingFooter";
+import ReferralPromoStrip from "@/components/ReferralPromoStrip";
 import DashboardSidebar, { type DashboardSidebarItem } from "@/components/DashboardSidebar";
 import PasswordDialog from "@/components/PasswordDialog";
 import RevokeSubscriptionDialog, { REVOKE_ACTION_LABEL } from "@/components/RevokeSubscriptionDialog";
@@ -779,6 +780,7 @@ const Dashboard = () => {
             icon: Gift,
             onClick: () => navigate("/referrals"),
             match: "/referrals",
+            highlight: true,
           },
         ] as DashboardSidebarItem[])
       : []),
@@ -891,6 +893,8 @@ const Dashboard = () => {
                 {isExpired ? "Подписка истекла" : "Подписка активна"}
               </span>
             </header>
+
+            <ReferralPromoStrip />
 
             <section className={`dash-hero ${isExpired ? "dash-hero--danger" : ""}`}>
               <div className="dash-hero__info">

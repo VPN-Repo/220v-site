@@ -23,6 +23,8 @@ export type DashboardSidebarItem = {
   icon: IconType;
   onClick: () => void;
   primary?: boolean;
+  /** Accent the item while it is not active, so it stands out in the menu. */
+  highlight?: boolean;
   /**
    * Pathname (or list of pathnames) that should mark this item as active.
    * An item matches when the current pathname equals the value or starts
@@ -254,7 +256,9 @@ export const DashboardSidebar = ({
                 type="button"
                 className={`dashboard-sidebar__link${
                   primary ? " dashboard-sidebar__link--primary" : ""
-                }${active ? " dashboard-sidebar__link--active" : ""}`}
+                }${active ? " dashboard-sidebar__link--active" : ""}${
+                  item.highlight && !active ? " dashboard-sidebar__link--highlight" : ""
+                }`}
                 aria-current={active ? "page" : undefined}
                 onClick={() => handleItem(item)}
               >

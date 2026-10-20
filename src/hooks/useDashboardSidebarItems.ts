@@ -159,6 +159,7 @@ export function useDashboardSidebarItems(): DashboardSidebarData {
         icon: Gift,
         onClick: () => navigate("/referrals"),
         match: "/referrals",
+        highlight: true,
       },
       {
         key: "other",

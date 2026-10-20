@@ -119,6 +119,14 @@ const referralExchangeRequestSchema = z.discriminatedUnion("type", [
   }),
 ]);
 const REFERRAL_POINTS_PER_DAY = 10;
+// Public referral rules shown in the UI. Points are credited by RMW; these mirror its
+// tiers so the site has a single source for the numbers it promises to users.
+const REFERRAL_RULES = Object.freeze({
+  pointsPerDay: REFERRAL_POINTS_PER_DAY,
+  registrationPoints: 1,
+  firstPaymentPoints: Object.freeze({ "1m": 100, "6m": 600, "12m": 1200 }),
+  repeatPaymentPercent: 10,
+});
 const REFERRAL_EXCHANGE_PERMISSION_COMMENT_MAX = 1000;
 const DEFAULT_EXCHANGE_APPROVE_COMMENT = "Обмен баллов пользователем";
 const DEFAULT_EXCHANGE_REJECT_COMMENT = "Отклонено оператором";
@@ -1555,6 +1563,39 @@ app.get("/api/me/referrals/status", requireSession, async (req, res) => {
     }
     req.log.warn({ err, status }, "referral status check failed");
     return clientError(res, status, "Не удалось проверить статус реферальной программы");
+  }
+});
+
+// Rules for the referral teasers plus whether this user should see them at all:
+// accrual-blocked or exchange-restricted referrers get no promo. `eligible` mirrors
+// RMW's "has an active paid tariff" flag and is null when RMW could not answer.
+app.get("/api/me/referrals/config", requireSession, async (req, res) => {
+  try {
+    const userUuid = assertValidUuid(req.session.userUuid);
+    const events = await queryReferralEvents({ referrerUuid: userUuid, limit: 5000 });
+    const risk = buildReferralRiskForReferrer(events, userUuid);
+    const status = await getReferralUserStatus(userUuid);
+    const blocked =
+      status.pointsBlocked || (isReferralExchangeRestricted(status, risk) && !isReferralExchangeAllowed(status));
+
+    let eligible = null;
+    if (!blocked && rmwBaseUrl() && rmwApiKey()) {
+      try {
+        const pointsData = await fetchRmwReferralPoints(userUuid, { page: 1, limit: 1 });
+        const active = pointsData?.eligibility?.active;
+        eligible = typeof active === "boolean" ? active : null;
+      } catch (err) {
+        req.log.warn({ err }, "referral config eligibility check failed");
+      }
+    }
+
+    return res.json({ ...REFERRAL_RULES, available: !blocked, eligible });
+  } catch (err) {
+    if (err?.message === "Invalid user UUID") {
+      return clientError(res, 400, "Некорректный UUID пользователя");
+    }
+    req.log.warn({ err }, "referral config failed");
+    return clientError(res, err.status || 502, "Не удалось загрузить условия реферальной программы");
   }
 });
 
