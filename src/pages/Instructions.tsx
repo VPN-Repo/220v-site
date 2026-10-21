@@ -45,7 +45,8 @@ import {
 import {
   INSTRUCTIONS_PLATFORMS,
   isInstructionsPlatform,
-  oneClickHappUrl,
+  happSubscriptionLink,
+  oneClickHappSubscriptionUrl,
   type InstructionsPlatform,
 } from "@/lib/happ";
 
@@ -138,14 +139,15 @@ const CopySubscriptionLink = ({ subscriptionUrl }: { subscriptionUrl?: string })
       return;
     }
 
-    void copyText(subscriptionUrl, btnRef.current).then((ok) => {
+    const happUrl = happSubscriptionLink(subscriptionUrl);
+    void copyText(happUrl, btnRef.current).then((ok) => {
       if (ok) {
         toast.success("Ссылка скопирована!", {
           style: { background: "#0a0a0a", color: "#fff", border: "1px solid #22c55e" },
         });
       } else {
         toast.error("Не удалось скопировать. Скопируйте вручную:", {
-          description: subscriptionUrl,
+          description: happUrl,
           duration: 8000,
         });
       }
@@ -244,7 +246,7 @@ const OneClickAddButton = ({ subscriptionUrl }: { subscriptionUrl?: string }) =>
         toast.error("Ссылка подписки недоступна");
         return;
       }
-      window.location.href = oneClickHappUrl(subscriptionUrl);
+      window.location.href = oneClickHappSubscriptionUrl(subscriptionUrl);
     }}
   >
     Добавить в один клик
@@ -654,7 +656,7 @@ const Instructions = () => {
                   loading="lazy"
                   decoding="async"
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-                    subscriptionUrl,
+                    happSubscriptionLink(subscriptionUrl),
                   )}`}
                 />
               </div>

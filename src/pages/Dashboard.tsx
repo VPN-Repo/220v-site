@@ -50,7 +50,7 @@ import {
 import type { BillingPaymentMethod } from "@/lib/paymentMethods";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { oneClickHappUrl, isInstructionsPlatform, type InstructionsPlatform } from "@/lib/happ";
+import { happSubscriptionLink, oneClickHappSubscriptionUrl, isInstructionsPlatform, type InstructionsPlatform } from "@/lib/happ";
 import LandingShell from "@/pages/landing/LandingShell";
 import LandingFooter from "@/pages/landing/LandingFooter";
 import ReferralPromoStrip from "@/components/ReferralPromoStrip";
@@ -680,14 +680,15 @@ const Dashboard = () => {
       return;
     }
 
-    void copyText(url, copySubscriptionButtonRef.current).then((ok) => {
+    const happUrl = happSubscriptionLink(url);
+    void copyText(happUrl, copySubscriptionButtonRef.current).then((ok) => {
       if (ok) {
         toast.success("Ссылка скопирована!", {
           style: { background: "#0a0a0a", color: "#fff", border: "1px solid #22c55e" },
         });
       } else {
         toast.error("Не удалось скопировать. Скопируйте вручную:", {
-          description: url,
+          description: happUrl,
           duration: 8000,
         });
       }
@@ -959,7 +960,7 @@ const Dashboard = () => {
                         toast.error("Ссылка подписки недоступна");
                         return;
                       }
-                      window.location.href = oneClickHappUrl(url);
+                      window.location.href = oneClickHappSubscriptionUrl(url);
                     }}
                   >
                     <Link2 className="h-5 w-5" aria-hidden="true" />
@@ -1220,7 +1221,7 @@ const Dashboard = () => {
                     height={220}
                     loading="lazy"
                     decoding="async"
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrUrl)}`}
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(happSubscriptionLink(qrUrl))}`}
                   />
                 </div>
                 <button

@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { CheckCircle2, Copy, Loader2 } from "lucide-react";
 import { apiPost } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
+import { happSubscriptionLink } from "@/lib/happ";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export type RevokeSubscriptionResponse = {
@@ -73,7 +74,7 @@ export default function RevokeSubscriptionDialog({ open, onOpenChange, onRevoked
 
   const copyNewUrl = () => {
     if (!newUrl) return;
-    void copyText(newUrl, copyButtonRef.current).then((ok) => {
+    void copyText(happSubscriptionLink(newUrl), copyButtonRef.current).then((ok) => {
       if (ok) {
         toast.success("Новая ссылка скопирована");
       } else {
