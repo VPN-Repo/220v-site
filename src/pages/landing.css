@@ -368,6 +368,20 @@
   color: var(--muted);
   font-size: 13px;
 }
+.landing-root .footer__requisites {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.landing-root .footer__requisites-line { max-width: 100%; }
 
 /* ---------- Modal ---------- */
 .landing-root .modal {

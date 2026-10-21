@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import logo220v from "@/assets/logo-220v.webp";
+import { OPERATOR_REQUISITES } from "@/lib/requisites";
 
 export const LandingFooter = () => (
   <footer className="footer">
@@ -19,6 +20,13 @@ export const LandingFooter = () => (
         </Link>
       </nav>
       <p className="footer__copy">© 2026 220v. Все права защищены.</p>
+      <address className="footer__requisites" aria-label="Реквизиты">
+        {OPERATOR_REQUISITES.map((line) => (
+          <span key={line} className="footer__requisites-line">
+            {line}
+          </span>
+        ))}
+      </address>
     </div>
   </footer>
 );
