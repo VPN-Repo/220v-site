@@ -104,7 +104,7 @@ function suggestDomain(domain: string): string {
   return best && !tie ? best : domain;
 }
 
-/** Plain-language list of what is wrong with the local part, e.g. "лишний «-» перед @". */
+/** Plain-language list of what is wrong with the local part, e.g. "перед @ лишний «-»". */
 export function describeLocalPartIssues(local: string): string[] {
   const issues: string[] = [];
   if (/\s/.test(local)) issues.push("пробел в адресе");
@@ -112,7 +112,7 @@ export function describeLocalPartIssues(local: string): string[] {
   if (/^\./.test(trimmed)) issues.push("лишняя точка в начале");
   if (/\.{2,}/.test(trimmed)) issues.push("две точки подряд");
   const tail = /[-._]+$/.exec(trimmed)?.[0];
-  if (tail) issues.push(tail.length === 1 ? `лишний «${tail}» перед @` : `лишние «${tail}» перед @`);
+  if (tail) issues.push(tail.length === 1 ? `перед @ лишний «${tail}»` : `перед @ лишние «${tail}»`);
   return issues;
 }
 
@@ -121,7 +121,7 @@ export type EmailTypo = {
   suggestion: string;
   /** True when the domain was corrected ("gmial.com" -> "gmail.com"). */
   domainChanged: boolean;
-  /** Local-part problems, for a "Похоже, в адресе опечатка: ..." hint. */
+  /** Local-part problems, for a "... — проверьте адрес" hint. */
   localIssues: string[];
 };
 

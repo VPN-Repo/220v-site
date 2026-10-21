@@ -302,7 +302,7 @@ const Index = () => {
         setResendCooldownSec(retryAfterSec ?? data.retryAfterSec ?? 30);
         toast({
           title: "✅ Код отправлен!",
-          description: resendNotice(data.sendNumber) || `Код подтверждения отправлен на ${normalizedEmail}`,
+          description: resendNotice(data.sendNumber) || `Код уже летит на ${normalizedEmail}`,
           className: "bg-[#0a0a0a] text-white border-green-500 shadow-[inset_4px_0_0_0_#22c55e]",
         });
       } else {
@@ -423,7 +423,7 @@ const Index = () => {
       const { data, error } = result;
 
       if (error) {
-        // A wrong code comes with "Осталось попыток: X из 5"; any other answer drops the counter.
+        // A wrong code comes with "Попыток осталось: X из 5"; any other answer drops the counter.
         setCodeAttempts(result.status === 400 ? codeAttemptsFrom(result) : null);
         throw new Error(authErrorMessage(result, "Ошибка проверки кода"));
       }
@@ -637,7 +637,7 @@ const Index = () => {
             <ul className="plan__features" role="list">
               <li>Все локации</li>
               <li>Безлимитный трафик*</li>
-              <li>Поддержка ежедневно с 05:00 до 01:00 (МСК)</li>
+              <li>Работаем ежедневно: 05:00–01:00 МСК</li>
             </ul>
             <button
               type="button"
@@ -661,7 +661,7 @@ const Index = () => {
             <ul className="plan__features" role="list">
               <li>Все локации</li>
               <li>Безлимитный трафик*</li>
-              <li>Поддержка ежедневно с 05:00 до 01:00 (МСК)</li>
+              <li>Работаем ежедневно: 05:00–01:00 МСК</li>
               <li>Экономия 15%</li>
             </ul>
             <button
@@ -717,7 +717,7 @@ const Index = () => {
           </a>
           {", также вы можете написать нам в чат на сайте, для этого необходимо авторизоваться."}
         </p>
-        <p>Время работы: с 05:00 до 01:00 ежедневно по МСК.</p>
+        <p>Работаем ежедневно: 05:00–01:00 МСК</p>
       </LandingModal>
 
       {/* Login modal */}
@@ -732,7 +732,7 @@ const Index = () => {
               ? `Пароль для ${normalizedEmail}`
               : (
                   <>
-                    Код отправлен на <b className="login-sent-email">{normalizedEmail}</b>
+                    Код уже летит на <b className="login-sent-email">{normalizedEmail}</b>
                   </>
                 )
         }
@@ -960,7 +960,7 @@ const Index = () => {
               </button>
             </p>
             <p className="form-link">
-              Не та почта?{" "}
+              Ошиблись почтой?{" "}
               <button
                 type="button"
                 onClick={() => {
@@ -970,7 +970,7 @@ const Index = () => {
                 }}
                 disabled={loading}
               >
-                Изменить
+                Исправить
               </button>
             </p>
             <p className="login-support-hint">

@@ -79,7 +79,7 @@ export default function PasswordDialog({ open, onOpenChange, hasPassword, onChan
       setCode("");
       setSent(true);
       setResendCooldownSec(retryAfterSec ?? data.retryAfterSec ?? 30);
-      toast.success(resendNotice(data.sendNumber) || "Код отправлен на ваш email");
+      toast.success(resendNotice(data.sendNumber) || "Код уже летит на ваш email");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Не удалось отправить код");
     } finally {

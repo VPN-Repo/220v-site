@@ -7,7 +7,7 @@ export function formatWaitTime(seconds: number): string {
 }
 
 export function formatResendCooldownMessage(seconds: number): string {
-  return `Подождите ${formatWaitTime(seconds)} перед повторной отправкой кода`;
+  return `Повторный код — через ${formatWaitTime(seconds)}`;
 }
 
 export function formatResendCooldownButtonLabel(seconds: number): string {
