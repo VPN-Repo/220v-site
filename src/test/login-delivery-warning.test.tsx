@@ -117,7 +117,7 @@ describe("login code screen delivery warning", () => {
     const dialog = await sendCodeFor("ivan@gmail.com");
     await advance(10_000);
     expect(statusCalls()).toHaveLength(1);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Изменить" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Исправить" }));
     await advance(60_000);
     expect(statusCalls()).toHaveLength(1);
   });

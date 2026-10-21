@@ -158,7 +158,7 @@ describe("Happ fallback link after revoke", () => {
   it("shows the plain URL in the field but copies the meta URL", async () => {
     vi.mocked(apiPost).mockResolvedValue({ data: { ok: true, subscriptionUrl: SUB, user: null }, error: null, status: 200 });
     render(<RevokeSubscriptionDialog open onOpenChange={vi.fn()} onRevoked={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Да, сбросить ссылку" }));
+    fireEvent.click(screen.getByRole("button", { name: "Выпустить новую" }));
 
     expect(await screen.findByLabelText("Новая ссылка подключения")).toHaveValue(SUB);
     fireEvent.click(screen.getByRole("button", { name: "Скопировать ссылку" }));
