@@ -4897,6 +4897,39 @@ body.landing-no-scroll { overflow: hidden; }
   font-weight: 600;
   word-break: break-all;
 }
+.landing-root .login-card .login-delivery-warning {
+  margin: -8px 0 18px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 107, 107, 0.45);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 107, 107, 0.08);
+  text-align: center;
+}
+.landing-root .login-card .login-delivery-warning p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #ff8a8a;
+}
+.landing-root .login-card .login-delivery-warning button {
+  margin-top: 8px;
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 107, 107, 0.55);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .landing-root .login-card .login-delivery-warning button:hover { background: rgba(255, 107, 107, 0.16); }
+}
+@media (pointer: coarse) {
+  .landing-root .login-card .login-delivery-warning button { padding: 8px 14px; }
+}
 .landing-root .login-card .login-attempts-hint {
   margin: -4px 0 14px;
   font-size: 13px;

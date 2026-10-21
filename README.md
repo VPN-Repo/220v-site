@@ -30,6 +30,7 @@ docker compose up -d --build
 | `BACKUP_SMTP_PORT` | Порт резервного SMTP, по умолчанию `587` |
 | `BACKUP_SMTP_SECURE` | `true` — implicit TLS (обычно порт 465); по умолчанию `false`: на 587 используется обязательный STARTTLS |
 | `BACKUP_MAIL_FROM_EMAIL` / `BACKUP_MAIL_FROM_NAME` | Опционально: отправитель для резервного SMTP; по умолчанию `MAIL_FROM_EMAIL` / `MAIL_FROM_NAME` |
+| `UNISENDER_API_KEY` | Опционально: API-ключ Unisender Go (не SMTP-пароль!) для проверки подписи вебхука `/api/webhooks/unisender`. Пусто — вебхук отвечает 503 и ничего не делает |
 | `ADMIN_REDIS_TOKEN` | Токен для `/admin/redis` |
 | `ADMIN_BASIC_USER` / `ADMIN_BASIC_PASSWORD` | Basic Auth nginx для админки |
 | `IP_HASH_SECRET` | Секретная соль для хэшей IP/UA/fingerprint в реферальной аналитике; обязательна в production |
@@ -55,6 +56,36 @@ docker compose up -d --build
 Пример для Unisender Go: `BACKUP_SMTP_HOST=<SMTP-хост из кабинета Unisender Go>`, `BACKUP_SMTP_PORT=587`, `BACKUP_SMTP_USER=<SMTP-логин>`, `BACKUP_SMTP_PASSWORD=<SMTP-пароль / API-ключ>`.
 
 **Важно:** домен отправителя (`MAIL_FROM_EMAIL`, либо `BACKUP_MAIL_FROM_EMAIL`, если задан) должен быть подтверждён в Unisender — добавьте в DNS выданные им записи SPF и DKIM. Иначе Unisender отклонит письма или они попадут в спам.
+
+### Вебхук Unisender Go: почему не пришёл код
+
+Письма через резервный SMTP помечаются заголовком `X-UNISENDER-GO: {"global_metadata":{"brand":"v220"}}`; письма SES не меняются. Unisender присылает статусы доставки на `POST /api/webhooks/unisender`:
+
+- подпись: поле `auth` = MD5 тела запроса, в котором значение `auth` заменено на `UNISENDER_API_KEY`; неверная подпись — 403, ключ не задан — 503. Тело до 1 МБ, поддерживается gzip;
+- учитываются только события `transactional_email_status` с `metadata.brand = v220` (на одном аккаунте Unisender несколько сайтов, у каждого свой вебхук, каждый получает все события и фильтрует по бренду);
+- несуществующий адрес, переполненный ящик, блокировка/спам и отписка сохраняются в Redis (`v220:mailbounce:<email>`, TTL 30 / 3 / 7 / 30 дней), статус `delivered` удаляет запись; `temporary_retry` и остальное только логируются (email в логах маскируется);
+- код всё равно отправляется: `POST /api/auth/send-code` добавляет в ответ `deliveryWarning`, а экран ввода кода 2 минуты раз в 10 с спрашивает `GET /api/auth/delivery-status?email=` и показывает предупреждение с кнопкой «Изменить почту». Этот запрос отвечает только для адреса, на который этот браузер только что запросил код (httpOnly-cookie `v220_otp_pending` = владелец текущего OTP), иначе `{"warning": null}`.
+
+Регистрация вебхука (один раз на сайт; повторный вызов с тем же `url` обновляет вебхук). При регистрации Unisender проверяет, что `GET https://<site>/api/webhooks/unisender` отвечает 200:
+
+```bash
+curl -sS https://goapi.unisender.ru/ru/transactional/api/v1/webhook/set.json \
+  -H 'Content-Type: application/json' \
+  -H 'X-API-KEY: <UNISENDER_API_KEY>' \
+  -d '{
+    "url": "https://<site>/api/webhooks/unisender",
+    "status": "active",
+    "event_format": "json_post",
+    "delivery_info": 1,
+    "single_event": 0,
+    "max_parallel": 5,
+    "events": {
+      "email_status": ["delivered", "soft_bounced", "hard_bounced", "spam", "unsubscribed"]
+    }
+  }'
+```
+
+Ключ в `X-API-KEY` и `UNISENDER_API_KEY` должен быть тем же ключом (пользователя или проекта), которым подписываются вебхуки. Проверить: `.../webhook/list.json` с тем же заголовком.
 
 ---
 

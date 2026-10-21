@@ -73,6 +73,22 @@ export const sendCodeEmailLimiter = makeRateLimit({
   message: { error: "Слишком много запросов для этого email. Попробуйте позже." },
 });
 
+// The code screen polls every 10 s for 2 minutes after each send.
+export const deliveryStatusIpLimiter = makeRateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  prefix: "v220:rl:deliverystatus:ip:",
+  message: { error: "Слишком много запросов. Попробуйте позже." },
+});
+
+// Unisender calls come from a few IPs, up to max_parallel at once with 100 events each.
+export const unisenderWebhookIpLimiter = makeRateLimit({
+  windowMs: 60 * 1000,
+  max: 1200,
+  prefix: "v220:rl:unisender:ip:",
+  message: { error: "Too many requests" },
+});
+
 export const verifyIpLimiter = makeRateLimit({
   windowMs: 15 * 60 * 1000,
   max: 150,

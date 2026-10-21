@@ -1,6 +1,14 @@
 import { Router } from "express";
 import { randomBytes } from "node:crypto";
-import { ALLOWED_EMAIL_DOMAINS, OTP_COOLDOWN_SEC, OTP_MAX_TRIES, OTP_TTL_SEC, SESSION_TTL_SEC } from "../config.mjs";
+import {
+  ALLOWED_EMAIL_DOMAINS,
+  COOKIE_SECURE,
+  OTP_COOLDOWN_SEC,
+  OTP_MAX_TRIES,
+  OTP_PENDING_COOKIE,
+  OTP_TTL_SEC,
+  SESSION_TTL_SEC,
+} from "../config.mjs";
 import { clientError, otpCooldownError, serverError } from "../http/errors.mjs";
 import {
   isTimeoutError,
@@ -19,13 +27,16 @@ import {
   passwordChangeEmailLimiter,
   passwordChangeAttemptLimiter,
   adminPasswordLimiter,
+  deliveryStatusIpLimiter,
 } from "../http/rateLimit.mjs";
+import { getDeliveryWarning } from "../email/unisenderBounces.mjs";
 import {
   base64url,
   emailHash,
   generateOtpCode,
   hashCode,
   maskEmail,
+  timingSafeEqualStr,
 } from "./crypto.mjs";
 import {
   buildRedisAuthSnapshot,
@@ -39,6 +50,7 @@ import {
   deleteOtp,
   getCooldownDebugSnapshot,
   getOtpDebugSnapshot,
+  getOtpOwner,
   pickOtpMailProvider,
   putOtp,
   recordOtpMailSend,
@@ -110,6 +122,27 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
   // The client says "code sent again (N-th send)" from sendNumber.
   const sendCodeOk = (sendNumber) =>
     sendNumber ? { ok: true, retryAfterSec: OTP_COOLDOWN_SEC, sendNumber } : { ok: true, retryAfterSec: OTP_COOLDOWN_SEC };
+  // A known bounce for the address (Unisender webhook) is a soft hint only:
+  // the code is still sent, and a lookup failure never fails the request.
+  const lookupDeliveryWarning = async (req, email) => {
+    try {
+      return await getDeliveryWarning(email);
+    } catch (err) {
+      req.log.warn({ err, emailHash: emailHash(email) }, "delivery warning lookup failed");
+      return null;
+    }
+  };
+  // The pending-code cookie holds the OTP owner token, so delivery-status
+  // answers only for the address this browser just requested a code for.
+  const setOtpPendingCookie = (res, owner) => {
+    res.cookie(OTP_PENDING_COOKIE, owner, {
+      path: "/api/auth",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: COOKIE_SECURE,
+      maxAge: OTP_TTL_SEC * 1000,
+    });
+  };
 
   router.get("/api/admin/redis-auth", requireAdminToken, async (req, res) => {
     try {
@@ -328,12 +361,37 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
           });
         }
 
+        setOtpPendingCookie(res, owner);
+        const deliveryWarning = await lookupDeliveryWarning(req, email);
+        if (deliveryWarning) {
+          req.log.info(
+            { emailHash: emailHash(email), category: deliveryWarning.category },
+            "send-code known delivery problem",
+          );
+          return res.json({ ...sendCodeOk(sendNumber), deliveryWarning });
+        }
         return res.json(sendCodeOk(sendNumber));
       } catch (err) {
         return serverError(res, req, err);
       }
     },
   );
+
+  // Polled by the code screen. Answers only for the email of this browser's
+  // pending code (cookie owner token == OTP owner); anything else gets null.
+  router.get("/api/auth/delivery-status", deliveryStatusIpLimiter, async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      const parsed = emailSchema.safeParse(typeof req.query.email === "string" ? req.query.email : "");
+      const token = req.cookies?.[OTP_PENDING_COOKIE];
+      if (!parsed.success || typeof token !== "string" || !token) return res.json({ warning: null });
+      const owner = await getOtpOwner(parsed.data);
+      if (!owner || !timingSafeEqualStr(owner, token)) return res.json({ warning: null });
+      return res.json({ warning: await lookupDeliveryWarning(req, parsed.data) });
+    } catch (err) {
+      return serverError(res, req, err);
+    }
+  });
 
   router.post("/api/auth/verify", verifyIpLimiter, async (req, res) => {
     try {

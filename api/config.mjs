@@ -4,6 +4,8 @@ export const COOKIE_SECURE =
   (process.env.COOKIE_SECURE !== "false" && isProd);
 export const SESSION_COOKIE = "v220_sid";
 export const CSRF_COOKIE = "v220_csrf";
+// Binds the browser to its pending login code (holds the OTP owner token).
+export const OTP_PENDING_COOKIE = "v220_otp_pending";
 export const SESSION_TTL_SEC = 60 * 24 * 60 * 60;
 export const SESSION_SLIDE_SEC = 30 * 24 * 60 * 60;
 export const OTP_TTL_SEC = 10 * 60;

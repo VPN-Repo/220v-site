@@ -15,6 +15,8 @@ export const passwordCooldownKey = (sid) => `${PREFIX}password:otp:cooldown:${si
 export const otpMailSendsKey = (email) =>
   `${PREFIX}mail:otp_sends:${createHash("sha256").update(email).digest("hex")}`;
 export const passwordMailSendsKey = (sid) => `${PREFIX}mail:password_sends:${sid}`;
+// Last Unisender bounce for an address (JSON {category, deliveryStatus, at}), set by the webhook.
+export const mailBounceKey = (email) => `${PREFIX}mailbounce:${email}`;
 
 export const refEventsListKey = () => `${PREFIX}ref:events`;
 export const refEventsReferrerIndexKey = (refUuid) => `${PREFIX}ref:events:by_referrer:${refUuid}`;
