@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
+import SubscriptionQr from "@/components/SubscriptionQr";
 import { useSession } from "@/hooks/useSession";
 import { trafficPurchaseRestriction, useTrafficPurchaseRestriction } from "@/hooks/useTrafficPurchaseRestriction";
 import { isPaidTariff } from "@/lib/tariff";
@@ -1214,15 +1215,7 @@ const Dashboard = () => {
             return (
               <div className="dash-modal__stack items-center">
                 <div className="dash-modal__qr">
-                  <img
-                    alt="QR-Code"
-                    className="h-52 w-52"
-                    width={220}
-                    height={220}
-                    loading="lazy"
-                    decoding="async"
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(happSubscriptionLink(qrUrl))}`}
-                  />
+                  <SubscriptionQr value={happSubscriptionLink(qrUrl)} alt="QR-Code" className="h-52 w-52" size={220} />
                 </div>
                 <button
                   type="button"

@@ -6,6 +6,9 @@ import Instructions from "@/pages/Instructions";
 import RevokeSubscriptionDialog from "@/components/RevokeSubscriptionDialog";
 import { apiGet, apiPost } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
+import { renderToStaticMarkup } from "react-dom/server";
+import { QRCodeSVG } from "qrcode.react";
+import SubscriptionQr from "@/components/SubscriptionQr";
 
 vi.mock("@/lib/api", () => ({ apiBase: "/api", apiGet: vi.fn(), apiPost: vi.fn(), apiDelete: vi.fn() }));
 vi.mock("@/lib/clipboard", () => ({ copyText: vi.fn() }));
@@ -16,8 +19,27 @@ vi.mock("@/hooks/useSession", () => ({
 const SUB = "https://220v.click/AbC123";
 const META =
   "https://220v.click/AbC123#220v?fallback-url=https%3A%2F%2F220vsub.online%2FAbC123%23220v-reserve";
-const QR_SRC = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(META)}`;
 const DEEP_LINK = `happ://add/${encodeURIComponent(META)}`;
+
+/** Module paths of a locally rendered QR for `value` (error correction M, 4-module quiet zone). */
+function expectedQrPaths(value: string): string[] {
+  const html = renderToStaticMarkup(<QRCodeSVG value={value} size={220} level="M" marginSize={4} />);
+  return [...html.matchAll(/ d="([^"]+)"/g)].map((m) => m[1]);
+}
+
+/** The QR is an inline SVG built in the browser for the meta URL, with no external image. */
+function expectLocalQr(qr: HTMLElement) {
+  expect(qr.tagName.toLowerCase()).toBe("svg");
+  expect(qr).toHaveAttribute("role", "img");
+  expect(qr).toHaveAttribute("aria-label", "QR-Code");
+  const paths = [...qr.querySelectorAll("path")].map((p) => p.getAttribute("d"));
+  expect(paths).toEqual(expectedQrPaths(META));
+  expect(paths).not.toEqual(expectedQrPaths(SUB));
+  expect(qr.querySelector("path[fill='#FFFFFF']")).not.toBeNull();
+  expect(qr.querySelector("path[fill='#000000']")).not.toBeNull();
+  expect(document.querySelector("img[src*='qrserver'], img[src^='http']")).toBeNull();
+  expect(document.body.innerHTML).not.toContain("qrserver");
+}
 
 function mockMe() {
   vi.mocked(apiGet).mockImplementation(async (path: string) => ({
@@ -90,8 +112,7 @@ describe("Happ fallback link on the dashboard", () => {
     await waitFor(() => expect(copyText).toHaveBeenCalledWith(META, expect.anything()));
 
     fireEvent.click(screen.getByRole("button", { name: "QR-код" }));
-    const qr = await screen.findByAltText("QR-Code");
-    expect(qr).toHaveAttribute("src", QR_SRC);
+    expectLocalQr(await screen.findByRole("img", { name: "QR-Code" }));
   });
 });
 
@@ -115,7 +136,7 @@ describe("Happ fallback link in the instructions", () => {
     await waitFor(() => expect(copyText).toHaveBeenCalledWith(META, expect.anything()));
 
     fireEvent.click(screen.getByRole("button", { name: /^QR-Code$/ }));
-    expect(await screen.findByAltText("QR-Code")).toHaveAttribute("src", QR_SRC);
+    expectLocalQr(await screen.findByRole("img", { name: "QR-Code" }));
     expect(document.body.textContent ?? "").not.toContain("fallback-url");
   });
 
@@ -142,5 +163,21 @@ describe("Happ fallback link after revoke", () => {
     expect(await screen.findByLabelText("Новая ссылка подключения")).toHaveValue(SUB);
     fireEvent.click(screen.getByRole("button", { name: "Скопировать ссылку" }));
     await waitFor(() => expect(copyText).toHaveBeenCalledWith(META, expect.anything()));
+  });
+});
+
+describe("SubscriptionQr fallback", () => {
+  it("shows the copyable link when the code cannot be generated", async () => {
+    const tooLong = `${META}${"x".repeat(5000)}`;
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      render(<SubscriptionQr value={tooLong} />);
+    } finally {
+      err.mockRestore();
+    }
+    expect(screen.queryByRole("img", { name: "QR-Code" })).toBeNull();
+    expect(screen.getByLabelText("Ссылка подписки")).toHaveValue(tooLong);
+    fireEvent.click(screen.getByRole("button", { name: "Скопировать ссылку" }));
+    await waitFor(() => expect(copyText).toHaveBeenCalledWith(tooLong, expect.anything()));
   });
 });

@@ -37,6 +37,7 @@ import LandingFooter from "@/pages/landing/LandingFooter";
 
 import { apiGet } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
+import SubscriptionQr from "@/components/SubscriptionQr";
 import {
   getVpnAuthEmail,
   getVpnSubscriptionUrl,
@@ -648,17 +649,7 @@ const Instructions = () => {
           {subscriptionUrl ? (
             <div className="dash-modal__stack items-center">
               <div className="dash-modal__qr">
-                <img
-                  alt="QR-Code"
-                  className="h-52 w-52"
-                  width={220}
-                  height={220}
-                  loading="lazy"
-                  decoding="async"
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-                    happSubscriptionLink(subscriptionUrl),
-                  )}`}
-                />
+                <SubscriptionQr value={happSubscriptionLink(subscriptionUrl)} alt="QR-Code" className="h-52 w-52" size={220} />
               </div>
               <button
                 type="button"
