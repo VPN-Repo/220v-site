@@ -18,7 +18,7 @@ vi.mock("@/hooks/useSession", () => ({
 
 const SUB = "https://220v.click/AbC123";
 const META =
-  "https://220v.click/AbC123#220v?fallback-url=https%3A%2F%2F220vsub.online%2FAbC123%23220v%2520%25D1%2580%25D0%25B5%25D0%25B7%25D0%25B5%25D1%2580%25D0%25B2";
+  "https://220v.click/AbC123#220v?fallback-url=https%3A%2F%2F220vsub.online%2FAbC123%23220v";
 const DEEP_LINK = `happ://add/${encodeURIComponent(META)}`;
 
 /** Module paths of a locally rendered QR for `value` (error correction M, 4-module quiet zone). */

@@ -32,7 +32,7 @@ export const HAPP_FALLBACK_HOST = "220vsub.online";
 /** Название подписки в Happ. ASCII, чтобы не зависеть от разбора процент-кодировки в Happ. */
 export const HAPP_TITLE = "220v";
 /** Название резервной подписки в Happ. */
-export const HAPP_FALLBACK_TITLE = "220v резерв";
+export const HAPP_FALLBACK_TITLE = "220v";
 
 /**
  * Ссылка подписки для Happ с мета-параметрами во фрагменте:
