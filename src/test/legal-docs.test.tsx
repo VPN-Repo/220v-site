@@ -65,8 +65,8 @@ describe("legal page markup", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "5. Политика возврата средств" })).toBeInTheDocument();
     expect(screen.getByText(/2 ГБ для тестового периода и 30 ГБ в месяц/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "https://220v.shop/price" })).toHaveAttribute("href", "/price");
-    expect(screen.getByRole("link", { name: "https://220v.shop/policy" })).toHaveAttribute("href", "/policy");
+    expect(screen.getByRole("link", { name: "https://220v.tech/price" })).toHaveAttribute("href", "/price");
+    expect(screen.getByRole("link", { name: "https://220v.tech/policy" })).toHaveAttribute("href", "/policy");
     expect(screen.getByRole("link", { name: "https://t.me/vpn220v_bot" })).toHaveAttribute(
       "href",
       "https://t.me/vpn220v_bot",

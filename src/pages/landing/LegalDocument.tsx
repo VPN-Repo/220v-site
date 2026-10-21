@@ -55,7 +55,7 @@ export function parseLegalText(source: string): LegalBlock[] {
 }
 
 const LINKABLE = /(https?:\/\/[^\s]+?|[\w.+-]+@[\w-]+(?:\.[\w-]+)+)(?=[.,;:!?)»]*(?:\s|$))/g;
-const SITE_ORIGIN = "https://220v.shop";
+const SITE_ORIGINS = ["https://220v.shop", "https://220v.tech"];
 
 /** Turns URLs and emails into links; the visible text stays exactly the same. */
 export function linkify(text: string): ReactNode[] {
@@ -71,9 +71,10 @@ export function linkify(text: string): ReactNode[] {
           {value}
         </a>,
       );
-    } else if (value.startsWith(`${SITE_ORIGIN}/`)) {
+    } else if (SITE_ORIGINS.some((origin) => value.startsWith(`${origin}/`))) {
+      const origin = SITE_ORIGINS.find((o) => value.startsWith(`${o}/`)) ?? "";
       out.push(
-        <Link key={start} to={value.slice(SITE_ORIGIN.length)}>
+        <Link key={start} to={value.slice(origin.length)}>
           {value}
         </Link>,
       );
