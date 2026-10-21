@@ -7,7 +7,7 @@ import {
 } from "@/lib/happ";
 
 const EXPECTED =
-  "https://220v.click/AbC123#220v?fallback-url=https%3A%2F%2F220vsub.online%2FAbC123%23220v-reserve";
+  "https://220v.click/AbC123#220v?fallback-url=https%3A%2F%2F220vsub.online%2FAbC123%23220v%2520%25D1%2580%25D0%25B5%25D0%25B7%25D0%25B5%25D1%2580%25D0%25B2";
 
 describe("happSubscriptionLink", () => {
   it("adds the title and the encoded fallback-url in the Happ fragment format", () => {
@@ -18,7 +18,7 @@ describe("happSubscriptionLink", () => {
     const link = happSubscriptionLink("https://220v.click/api/sub/AbC123?a=1&b=2");
     expect(link.startsWith("https://220v.click/api/sub/AbC123?a=1&b=2#220v?fallback-url=")).toBe(true);
     const encoded = link.split("?fallback-url=")[1];
-    expect(decodeURIComponent(encoded)).toBe(`https://${HAPP_FALLBACK_HOST}/api/sub/AbC123?a=1&b=2#220v-reserve`);
+    expect(decodeURIComponent(encoded)).toBe(`https://${HAPP_FALLBACK_HOST}/api/sub/AbC123?a=1&b=2#${encodeURIComponent("220v резерв")}`);
     // the encoded value carries no raw separators that would split the fragment
     expect(encoded).not.toMatch(/[#?&/:]/);
   });
