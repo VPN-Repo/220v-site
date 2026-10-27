@@ -49,6 +49,9 @@ import {
   setVpnTalkmeProfileJson,
 } from "@/lib/vpnStorage";
 import type { BillingPaymentMethod } from "@/lib/paymentMethods";
+import { PROMO_DAYS_APPLIED_EVENT, isPromoUnsupportedMethod, pluralDays, promoCheckoutFields } from "@/lib/promo";
+import { usePromo } from "@/hooks/usePromo";
+import PromoCheckoutNotice from "@/components/PromoCheckoutNotice";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { happSubscriptionLink, oneClickHappSubscriptionUrl, isInstructionsPlatform, type InstructionsPlatform } from "@/lib/happ";
@@ -159,16 +162,6 @@ function formatBytes(bytes: number): string {
   return (bytes / Math.pow(1024, i)).toFixed(1) + " " + units[i];
 }
 
-/** Русская плюральная форма для «день/дня/дней». */
-function pluralDays(n: number): string {
-  const abs = Math.abs(Math.round(n)) % 100;
-  const last = abs % 10;
-  if (abs > 10 && abs < 20) return "дней";
-  if (last === 1) return "день";
-  if (last >= 2 && last <= 4) return "дня";
-  return "дней";
-}
-
 type RingProps = {
   /** Заполненная доля кольца в диапазоне 0..100. */
   percent: number;
@@ -230,6 +223,9 @@ const Dashboard = () => {
   const [promoResult, setPromoResult] = useState<PromoResult | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [promoCode, setPromoCode] = useState("");
+  // «days» — бонусные дни (/api/me/promo-code/apply), «sale» — скидка на следующую оплату.
+  const [promoKind, setPromoKind] = useState<"days" | "sale">("days");
+  const { activePromo, resolving: saleResolving, resolveManualPromo, refreshActivePromo } = usePromo();
   const [subscriptionQrOpen, setSubscriptionQrOpen] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [hasPassword, setHasPassword] = useState(false);
@@ -425,6 +421,15 @@ const Dashboard = () => {
     applyUserProfile(data.user);
   }, [email, applyUserProfile]);
 
+  // Days from a ?pdays= link are granted by PromoProvider; reread the profile shown here.
+  useEffect(() => {
+    const onDaysApplied = () => {
+      void refreshUserData().catch((err) => console.warn("refresh user after promo link failed:", err));
+    };
+    window.addEventListener(PROMO_DAYS_APPLIED_EVENT, onDaysApplied);
+    return () => window.removeEventListener(PROMO_DAYS_APPLIED_EVENT, onDaysApplied);
+  }, [refreshUserData]);
+
   const handleSubscriptionRevoked = useCallback(
     async ({ user, subscriptionUrl }: { user: unknown; subscriptionUrl: string }) => {
       if (subscriptionUrl) setVpnSubscriptionUrl(subscriptionUrl);
@@ -563,6 +568,14 @@ const Dashboard = () => {
     }
   }, [loading, error, userData, location.search, clearDashboardSearch, fetchDevices, navigate, applyPromoCode]);
 
+  // On success PromoProvider shows the toast and opens the tariff choice.
+  const saveSalePromo = async () => {
+    if (await resolveManualPromo(promoCode)) {
+      setPromoCode("");
+      setPromoOpen(false);
+    }
+  };
+
   const handleOpenDevices = () => {
     const count = userData?.currentDevices ?? 0;
     if (count === 0) {
@@ -635,6 +648,7 @@ const Dashboard = () => {
       const { data, error: fnError } = await apiPost<{ payment_url?: string }>("/checkout", {
         product_key,
         payment_method: paymentMethod,
+        ...promoCheckoutFields(activePromo),
       });
       if (fnError) throw fnError;
       const paymentUrl =
@@ -650,10 +664,15 @@ const Dashboard = () => {
       toast.error(err instanceof Error ? err.message : "Ошибка при создании платежа");
     } finally {
       setPaymentLoading(null);
+      await refreshActivePromo();
     }
   };
 
   const handleTrafficPaymentMethodClick = (method: BillingPaymentMethod) => {
+    if (isPromoUnsupportedMethod(method, activePromo)) {
+      toast.error("С промокодом этот способ оплаты недоступен");
+      return;
+    }
     void handleTrafficPayment(method.id);
   };
 
@@ -1328,15 +1347,25 @@ const Dashboard = () => {
                     Мне нужно продлить подписку →
                   </button>
                 </div>
+                <PromoCheckoutNotice promo={activePromo} />
                 {paymentMethods.map((method) => (
                   <button
                     key={method.id}
                     type="button"
                     className="dash-modal-btn dash-modal-btn--ghost"
-                    disabled={paymentLoading !== null}
+                    disabled={paymentLoading !== null || isPromoUnsupportedMethod(method, activePromo)}
                     onClick={() => handleTrafficPaymentMethodClick(method)}
                   >
-                    {paymentLoading === method.id ? <Loader2 className="h-5 w-5 animate-spin" /> : method.label}
+                    {paymentLoading === method.id ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <>
+                        {method.label}
+                        {isPromoUnsupportedMethod(method, activePromo) ? (
+                          <span className="pay-page__method-note">· не работает с промокодом</span>
+                        ) : null}
+                      </>
+                    )}
                   </button>
                 ))}
               </>
@@ -1420,14 +1449,39 @@ const Dashboard = () => {
         <DialogContent className="dash-modal sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Промокод</DialogTitle>
-            <DialogDescription>Введите промокод чтобы активировать бонусы</DialogDescription>
+            <DialogDescription>
+              {promoKind === "days"
+                ? "Введите промокод чтобы активировать бонусы"
+                : "Код скидки сохранится до следующей оплаты, итоговую сумму посчитает платёжный сервис"}
+            </DialogDescription>
           </DialogHeader>
           <div className="dash-modal__stack">
+            <div className="dash-modal__segmented" role="group" aria-label="Тип промокода">
+              <button
+                type="button"
+                className="dash-modal-btn dash-modal-btn--ghost"
+                aria-pressed={promoKind === "days"}
+                onClick={() => setPromoKind("days")}
+              >
+                Бонусные дни
+              </button>
+              <button
+                type="button"
+                className="dash-modal-btn dash-modal-btn--ghost"
+                aria-pressed={promoKind === "sale"}
+                onClick={() => setPromoKind("sale")}
+              >
+                Скидка на оплату
+              </button>
+            </div>
+            {promoKind === "sale" && activePromo ? (
+              <p className="dash-modal__hint">Сейчас сохранён код {activePromo.code}, новый заменит его</p>
+            ) : null}
             <input
               type="text"
               value={promoCode}
               onChange={(e) => setPromoCode(e.target.value)}
-              placeholder="Введите промокод"
+              placeholder={promoKind === "days" ? "Введите промокод" : "Код скидки"}
               inputMode="text"
               autoComplete="off"
               autoCapitalize="characters"
@@ -1435,14 +1489,25 @@ const Dashboard = () => {
               enterKeyHint="done"
               className="dash-modal__input"
             />
-            <button
-              type="button"
-              className="dash-modal-btn dash-modal-btn--primary"
-              disabled={promoApplying}
-              onClick={() => void applyPromoCode(promoCode)}
-            >
-              {promoApplying ? "Активируем..." : "Активировать"}
-            </button>
+            {promoKind === "days" ? (
+              <button
+                type="button"
+                className="dash-modal-btn dash-modal-btn--primary"
+                disabled={promoApplying}
+                onClick={() => void applyPromoCode(promoCode)}
+              >
+                {promoApplying ? "Активируем..." : "Активировать"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="dash-modal-btn dash-modal-btn--primary"
+                disabled={saleResolving}
+                onClick={() => void saveSalePromo()}
+              >
+                {saleResolving ? "Сохраняем..." : "Сохранить скидку"}
+              </button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

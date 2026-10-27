@@ -48,7 +48,8 @@ import {
 import { SESSION_COOKIE } from "./config.mjs";
 import { base64url, emailHash, maskEmail } from "./auth/crypto.mjs";
 import { createAuthRouter } from "./auth/routes.mjs";
-import { requireSession, getSession, requireAdminToken } from "./auth/session.mjs";
+import { requireSession, getSession, requireAdminToken, updateSessionPromo } from "./auth/session.mjs";
+import { activePromo, createPromoRouter, PROMO_APPLY_FAILED_MESSAGE } from "./promo.mjs";
 import { getCredential } from "./auth/password.mjs";
 import { getMailerConfigSummary, sendOtpEmail, verifyMailerConfig } from "./mailer.mjs";
 import { registerTalkMeRoutes } from "./talkme-routes.mjs";
@@ -93,6 +94,7 @@ app.use(
 app.use(createUnisenderWebhookRouter({ limiter: unisenderWebhookIpLimiter }));
 app.use(express.json({ limit: "16kb" }));
 app.use(cookieParser());
+app.use(createPromoRouter({ applyDays: requestRmwPromoApply }));
 
 function getBillingAllowedHosts() {
   const raw = process.env.BILLING_ALLOWED_HOSTS?.trim();
@@ -124,6 +126,8 @@ function isAllowedPaymentUrl(url) {
 const checkoutSchema = z.object({
   product_key: z.enum(["sub_1m", "sub_6m", "sub_12m", "traffic_20gb", "traffic_50gb"]),
   payment_method: z.union([z.number().int(), z.string()]),
+  // The code the browser shows as saved. Only compared with the session, never sent to RMW.
+  expected_promo_code: z.string().trim().min(1).max(64).transform((code) => code.toUpperCase()).optional(),
 });
 const applyPromoCodeSchema = z.object({
   promo_code: z.string().trim().toUpperCase().regex(/^[A-Z0-9_-]{2,64}$/),
@@ -271,11 +275,12 @@ async function fetchRmwJsonList({ rmwUrl, rmwKey, path }) {
     throw new Error(`RMW ${path} failed (${r.status})`);
   }
 
-  if (!Array.isArray(data)) {
+  const items = Array.isArray(data) ? data : data?.items;
+  if (!Array.isArray(items)) {
     throw new Error(`Unexpected response from RMW ${path}`);
   }
 
-  return data;
+  return items;
 }
 
 function extractRmwUserEmail(payload) {
@@ -657,15 +662,26 @@ async function getRmwBillingMeta({ allowCache = true } = {}) {
     return rmwMetaCache;
   }
 
-  const [paymentsRaw, productsRaw] = await Promise.all([
+  const [paymentsRaw, productsRaw, methodsRaw] = await Promise.all([
     fetchRmwJsonList({ rmwUrl, rmwKey, path: "/v1/payments/list" }),
     fetchRmwJsonList({ rmwUrl, rmwKey, path: "/v1/products/list" }),
+    // Only this list carries `provider` (needed to keep promo codes away from Tribute).
+    fetchRmwJsonList({ rmwUrl, rmwKey, path: "/v1/payments/methods" }).catch(() => []),
   ]);
+  const providerById = new Map(
+    methodsRaw
+      .filter((m) => typeof m?.provider === "string")
+      .map((m) => [Number(m.id), m.provider.trim().toLowerCase()]),
+  );
 
   const payments = paymentsRaw
+    .filter((p) => p?.active !== false && p?.is_active !== false && p?.active !== 0 && p?.is_active !== 0)
     .map((p) => ({
       id: typeof p?.id === "number" ? p.id : Number(p?.id),
       type: typeof p?.type === "string" ? p.type : "",
+      provider:
+        providerById.get(Number(p?.id)) ??
+        (typeof p?.provider === "string" ? p.provider.trim().toLowerCase() : ""),
     }))
     .filter((p) => Number.isInteger(p.id) && p.id > 0 && p.type);
 
@@ -1775,6 +1791,24 @@ app.get("/api/me/devices", requireSession, async (req, res) => {
   }
 });
 
+// One RMW call for both the manual days form below and ?pdays= links (api/promo.mjs).
+function requestRmwPromoApply(userRef, promoCode) {
+  const rmwUrl = rmwBaseUrl();
+  const rmwKey = rmwApiKey();
+  if (!rmwUrl || !rmwKey) throw new Error("RMW_API_URL and RMW_API_KEY are required");
+  return fetchWithTimeout(`${rmwUrl}/v1/billing/promo-code/apply`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Api-Key": rmwKey,
+    },
+    body: JSON.stringify({
+      user_ref: assertValidUuid(userRef),
+      promo_code: promoCode,
+    }),
+  });
+}
+
 app.post("/api/me/promo-code/apply", requireSession, async (req, res) => {
   try {
     const parsed = applyPromoCodeSchema.safeParse(req.body);
@@ -1783,23 +1817,11 @@ app.post("/api/me/promo-code/apply", requireSession, async (req, res) => {
     }
 
     const userRef = assertValidUuid(req.session.userUuid);
-    const rmwUrl = rmwBaseUrl();
-    const rmwKey = rmwApiKey();
-    if (!rmwUrl || !rmwKey) {
+    if (!rmwBaseUrl() || !rmwApiKey()) {
       return clientError(res, 500, "Активация промокода временно недоступна");
     }
 
-    const r = await fetchWithTimeout(`${rmwUrl}/v1/billing/promo-code/apply`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Api-Key": rmwKey,
-      },
-      body: JSON.stringify({
-        user_ref: userRef,
-        promo_code: parsed.data.promo_code,
-      }),
-    });
+    const r = await requestRmwPromoApply(userRef, parsed.data.promo_code);
 
     const text = await r.text();
     let data;
@@ -1815,11 +1837,7 @@ app.post("/api/me/promo-code/apply", requireSession, async (req, res) => {
         { status: r.status, body: typeof data === "object" ? data : null },
         "RMW promo apply failed",
       );
-      return clientError(
-        res,
-        r.status >= 500 ? 502 : r.status,
-        "Промокод недействителен, уже использован или временно недоступен",
-      );
+      return clientError(res, r.status >= 500 ? 502 : r.status, PROMO_APPLY_FAILED_MESSAGE);
     }
 
     const daysAdded = Number(data?.days_added);
@@ -2005,6 +2023,7 @@ app.get("/api/billing/meta", async (req, res) => {
       id: p.id,
       type: p.type,
       label: paymentTypeToLabel(p.type),
+      provider: p.provider,
     }));
 
     return res.json({
@@ -2018,6 +2037,57 @@ app.get("/api/billing/meta", async (req, res) => {
   }
 });
 
+// RMW can silently drop an unknown code and bill the full price. Before handing out the payment
+// link, read the created transaction back and require our code and an amount below the base price.
+// Returns an error response when the discount cannot be confirmed, otherwise null.
+async function verifyPromoPayment(req, { data, paymentUrl, tariff_key, pm, promo, rmwUrl, rmwKey }) {
+  const res = req.res;
+  const unverified = () =>
+    clientError(res, 502, "Не получилось проверить сумму со скидкой. Повторите позже.", { code: "promo_unverified" });
+  const transactionId = typeof data?.transaction_id === "string" ? data.transaction_id.trim() : "";
+  let basePrice;
+  try {
+    basePrice = (await getRmwBillingMeta({ allowCache: true })).products.find((p) => p.name === tariff_key)?.price;
+  } catch (err) {
+    req.log.warn({ err }, "Promo checkout base price unavailable");
+  }
+  if (!transactionId || !Number.isFinite(basePrice)) return unverified();
+
+  let payment;
+  try {
+    const verification = await fetchWithTimeout(
+      `${rmwUrl}/v1/billing/transactions/${encodeURIComponent(transactionId)}`,
+      { method: "GET", headers: { "X-Api-Key": rmwKey } },
+    );
+    if (verification.ok) payment = await verification.json();
+  } catch (err) {
+    req.log.warn({ err }, "Promo checkout verification failed");
+  }
+  if (!payment || typeof payment !== "object") return unverified();
+
+  if (
+    payment.transaction_id !== transactionId ||
+    payment.id !== data.payment_id ||
+    payment.payment_url !== paymentUrl ||
+    payment.tariff_key !== tariff_key ||
+    payment.payment_method_id !== pm ||
+    typeof payment.promo_code !== "string" ||
+    payment.promo_code.trim().toUpperCase() !== promo.code ||
+    typeof payment.original_amount !== "number" ||
+    !Number.isFinite(payment.original_amount) ||
+    payment.original_amount >= basePrice
+  ) {
+    req.log.warn({ transactionId, paymentId: data.payment_id }, "Promo checkout amount or code could not be verified");
+    return clientError(
+      res,
+      409,
+      "Скидка не попала в сумму счёта, поэтому переход к оплате отменён. Можно выбрать другой способ оплаты или написать в поддержку.",
+      { code: "promo_unverified" },
+    );
+  }
+  return null;
+}
+
 app.post("/api/checkout", requireSession, checkoutSessionLimiter, async (req, res) => {
   try {
     const parsed = checkoutSchema.safeParse(req.body);
@@ -2025,7 +2095,7 @@ app.post("/api/checkout", requireSession, checkoutSessionLimiter, async (req, re
       return clientError(res, 400, "Некорректный запрос на оплату");
     }
 
-    const { product_key, payment_method } = parsed.data;
+    const { product_key, payment_method, expected_promo_code } = parsed.data;
     if (!VALID_CHECKOUT_PRODUCTS.has(product_key)) {
       return clientError(res, 400, "Некорректный тариф");
     }
@@ -2037,6 +2107,18 @@ app.post("/api/checkout", requireSession, checkoutSessionLimiter, async (req, re
     }
 
     const ref = assertValidUuid(req.session.userUuid);
+    const promo = activePromo(req.session);
+    const promoSnapshot = req.session.activePromo;
+    // The browser may only assert which code it expects; RMW gets the code from the session alone.
+    // A mismatch means the discount is gone, so no full-price payment is created behind the user's back.
+    if (expected_promo_code && promo?.code !== expected_promo_code) {
+      return clientError(
+        res,
+        409,
+        "Скидка не найдена в текущей сессии. Нужно заново открыть промоссылку или ввести код.",
+        { code: "promo_not_saved" },
+      );
+    }
 
     const { successUrl: returnUrl, cancelUrl: failedUrl } = getBillingRedirectUrls();
     if (!isValidHttpsUrl(returnUrl) || !isValidHttpsUrl(failedUrl)) {
@@ -2051,8 +2133,22 @@ app.post("/api/checkout", requireSession, checkoutSessionLimiter, async (req, re
 
     try {
       const meta = await getRmwBillingMeta({ allowCache: true });
-      if (!meta.payments.some((p) => p.id === pm)) {
+      const method = meta.payments.find((p) => p.id === pm);
+      if (!method) {
         return clientError(res, 400, "Этот способ оплаты не поддерживается");
+      }
+      if (promo && !method.provider) {
+        return clientError(
+          res,
+          409,
+          "Не получилось проверить, работает ли промокод с этим способом оплаты. Можно выбрать другой способ или повторить позже.",
+          { code: "promo_provider_unknown" },
+        );
+      }
+      if (promo && method.provider === "tribute") {
+        return clientError(res, 409, "С промокодом этот способ оплаты недоступен", {
+          code: "promo_provider_unsupported",
+        });
       }
       if (!meta.products.some((p) => p.name === tariff_key)) {
         return clientError(res, 400, "Этот тариф не поддерживается");
@@ -2084,6 +2180,7 @@ app.post("/api/checkout", requireSession, checkoutSessionLimiter, async (req, re
       payment_method: pm,
       return_url: returnUrl,
       failed_url: failedUrl,
+      ...(promo ? { promo_code: promo.code } : {}),
     };
 
     const r = await fetchWithTimeout(`${rmwUrl}/v1/billing/checkout`, {
@@ -2106,6 +2203,21 @@ app.post("/api/checkout", requireSession, checkoutSessionLimiter, async (req, re
 
     if (!r.ok) {
       req.log.warn({ status: r.status }, "RMW checkout failed");
+      // RMW has no stable error codes yet, so promo refusals are recognised by message text.
+      const upstreamError = typeof data?.error === "string" ? data.error.toLowerCase() : "";
+      if (
+        promo &&
+        (upstreamError.includes("promo code is invalid or unavailable") ||
+          upstreamError.includes("unsupported promo discount type"))
+      ) {
+        await updateSessionPromo(req.session.sid, null, promoSnapshot);
+        return clientError(res, 400, "Промокод недействителен или больше не действует", { code: "promo_code_invalid" });
+      }
+      if (promo && upstreamError.includes("payment amount must be greater than zero")) {
+        return clientError(res, 400, "К этому тарифу промокод не применяется. Можно выбрать другой вариант.", {
+          code: "promo_not_applicable",
+        });
+      }
       return clientError(res, r.status >= 400 && r.status < 600 ? r.status : 502, "Не удалось создать платёж");
     }
 
@@ -2115,8 +2227,25 @@ app.post("/api/checkout", requireSession, checkoutSessionLimiter, async (req, re
         : "";
 
     if (paymentUrl && !isAllowedPaymentUrl(paymentUrl)) {
-      req.log.error({ paymentUrlHost: new URL(paymentUrl).hostname }, "payment_url host not allowed");
+      let paymentUrlHost = "";
+      try {
+        paymentUrlHost = new URL(paymentUrl).hostname;
+      } catch {
+        // not a URL at all
+      }
+      req.log.error({ paymentUrlHost }, "payment_url host not allowed");
       return clientError(res, 502, "Получена некорректная ссылка на оплату");
+    }
+
+    if (promo) {
+      // The saved code stays in the session until a usable payment link exists.
+      if (!paymentUrl) {
+        return clientError(res, 502, "Получена некорректная ссылка на оплату");
+      }
+      const verified = await verifyPromoPayment(req, { data, paymentUrl, tariff_key, pm, promo, rmwUrl, rmwKey });
+      if (verified) return verified;
+      // Consumed once the discounted payment exists, before the user actually pays.
+      await updateSessionPromo(req.session.sid, null, promoSnapshot);
     }
 
     try {

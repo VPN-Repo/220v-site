@@ -154,6 +154,10 @@ BFF в RMW шлёт: `user_ref`, `tariff_key`, `payment_method` (int), `return_u
 
 Цены и маппинг продуктов на тарифы задаются в **RMW**, а не в этом репозитории.
 
+### Промокоды и промоссылки
+
+Ссылки `?pdays=CODE` (бонусные дни) и `?psale=CODE` (скидка на следующую оплату), ручной ввод кода, поля `expected_promo_code` / `promo_code` в checkout и проверка скидки перед оплатой описаны в [docs/promocodes.md](docs/promocodes.md).
+
 ---
 
 ## Отписка от email-рассылки

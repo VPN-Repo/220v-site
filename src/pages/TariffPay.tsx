@@ -5,6 +5,9 @@ import { toast } from "sonner";
 
 import { apiGet, apiPost } from "@/lib/api";
 import type { BillingPaymentMethod } from "@/lib/paymentMethods";
+import { isPromoUnsupportedMethod, promoCheckoutFields } from "@/lib/promo";
+import { usePromo } from "@/hooks/usePromo";
+import PromoCheckoutNotice from "@/components/PromoCheckoutNotice";
 import DashboardSidebar from "@/components/DashboardSidebar";
 import { useDashboardSidebarItems } from "@/hooks/useDashboardSidebarItems";
 import LandingShell from "@/pages/landing/LandingShell";
@@ -54,6 +57,7 @@ const TariffPay = () => {
   const [billingLoading, setBillingLoading] = useState(true);
   const [billingError, setBillingError] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState<number | null>(null);
+  const { activePromo, refreshActivePromo } = usePromo();
   useEffect(() => {
     if (!productKey) {
       navigate("/tariff", { replace: true });
@@ -106,6 +110,7 @@ const TariffPay = () => {
       const { data, error: fnError } = await apiPost<{ payment_url?: string }>("/checkout", {
         product_key: productKey,
         payment_method: paymentMethod,
+        ...promoCheckoutFields(activePromo),
       });
       if (fnError) throw fnError;
       const paymentUrl =
@@ -125,10 +130,16 @@ const TariffPay = () => {
       toast.error(message);
     } finally {
       setPaymentLoading(null);
+      // A refused or consumed discount must disappear from the screen.
+      await refreshActivePromo();
     }
   };
 
   const handlePaymentMethodClick = (method: BillingPaymentMethod) => {
+    if (isPromoUnsupportedMethod(method, activePromo)) {
+      toast.error("С промокодом этот способ оплаты недоступен");
+      return;
+    }
     void handlePayment(method.id);
   };
 
@@ -181,6 +192,7 @@ const TariffPay = () => {
                   </div>
                 ) : (
                   <>
+                    <PromoCheckoutNotice promo={activePromo} />
                     <span className="plan__eyebrow">Способ оплаты</span>
                     <div className="pay-page__methods">
                       {paymentMethods.map((m) => (
@@ -188,13 +200,18 @@ const TariffPay = () => {
                           key={m.id}
                           type="button"
                           className="btn btn--ghost btn--wide pay-page__method"
-                          disabled={paymentLoading !== null || !userUuid}
+                          disabled={paymentLoading !== null || !userUuid || isPromoUnsupportedMethod(m, activePromo)}
                           onClick={() => handlePaymentMethodClick(m)}
                         >
                           {paymentLoading === m.id ? (
                             <Loader2 className="pay-page__spinner pay-page__spinner--sm" aria-label="Загрузка" />
                           ) : (
-                            m.label
+                            <>
+                              {m.label}
+                              {isPromoUnsupportedMethod(m, activePromo) ? (
+                                <span className="pay-page__method-note">· не работает с промокодом</span>
+                              ) : null}
+                            </>
                           )}
                         </button>
                       ))}

@@ -17,6 +17,7 @@ COPY --chown=node:node api/env.mjs ./env.mjs
 COPY --chown=node:node api/config.mjs ./config.mjs
 COPY --chown=node:node api/logger.mjs ./logger.mjs
 COPY --chown=node:node api/redis.mjs ./redis.mjs
+COPY --chown=node:node api/promo.mjs ./promo.mjs
 COPY --chown=node:node api/mailer.mjs ./mailer.mjs
 COPY --chown=node:node api/talkme-routes.mjs ./talkme-routes.mjs
 COPY --chown=node:node api/http ./http

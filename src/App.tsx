@@ -22,6 +22,7 @@ import NotFound from "./pages/NotFound";
 import AdminRedis from "./pages/AdminRedis";
 import AdminReferrals from "./pages/AdminReferrals";
 import RequireVpnAuth from "./components/RequireVpnAuth";
+import { PromoProvider } from "./components/PromoProvider";
 import { SessionProvider } from "./hooks/useSession";
 
 const queryClient = new QueryClient();
@@ -33,6 +34,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <SessionProvider>
+        <PromoProvider>
         <Routes>
           <Route path="/" element={<Index />} />
           <Route
@@ -117,6 +119,7 @@ const App = () => (
           <Route path="/pay/fail" element={<PayFail />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </PromoProvider>
         </SessionProvider>
       </BrowserRouter>
     </TooltipProvider>

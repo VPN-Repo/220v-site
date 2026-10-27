@@ -1,6 +1,7 @@
 import {
   COOKIE_SECURE,
   CSRF_COOKIE,
+  PROMO_PENDING_COOKIE,
   SESSION_COOKIE,
   SESSION_SLIDE_SEC,
   SESSION_TTL_SEC,
@@ -32,6 +33,7 @@ export function setSessionCookies(res, sid, csrf) {
 export function clearSessionCookies(res) {
   res.clearCookie(SESSION_COOKIE, { path: "/" });
   res.clearCookie(CSRF_COOKIE, { path: "/" });
+  res.clearCookie(PROMO_PENDING_COOKIE, { path: "/", httpOnly: true, sameSite: "lax", secure: COOKIE_SECURE });
 }
 
 export async function getSession(sid) {
@@ -91,6 +93,7 @@ export async function loadSession(req, res, next) {
     userUuid: session.userUuid,
     email: session.email,
     csrf: session.csrf,
+    activePromo: session.activePromo,
   };
   return next();
 }
@@ -129,4 +132,35 @@ export function requireAdminToken(req, res, next) {
     return clientError(res, 401, "Требуется авторизация");
   }
   return next();
+}
+
+// Changes only the saved discount code, atomically, keeping the TTL and every other session field.
+// With expectedPromo the update applies only to that exact saved version, so a checkout never
+// drops a code that was saved again while it was running.
+export async function updateSessionPromo(sid, promo, expectedPromo = null) {
+  const key = sessionKey(sid);
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const raw = await redis.get(key);
+    if (!raw) return 0;
+    const session = JSON.parse(raw);
+    if (expectedPromo && JSON.stringify(session.activePromo) !== JSON.stringify(expectedPromo)) return 0;
+    if (promo) session.activePromo = promo;
+    else delete session.activePromo;
+    const saved = await redis.eval(
+      `
+      if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+      local ttl = redis.call('TTL', KEYS[1])
+      if ttl <= 0 then ttl = tonumber(ARGV[3]) end
+      redis.call('SET', KEYS[1], ARGV[2], 'EX', ttl)
+      return 1
+      `,
+      1,
+      key,
+      raw,
+      JSON.stringify(session),
+      SESSION_SLIDE_SEC,
+    );
+    if (saved) return 1;
+  }
+  throw new Error("Concurrent session updates did not settle");
 }

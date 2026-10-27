@@ -5311,3 +5311,28 @@ body.landing-no-scroll { overflow: hidden; }
 .landing-root .dashboard-sidebar__link--highlight .dashboard-sidebar__link-icon {
   color: var(--accent);
 }
+
+/* Промокод со скидкой на экранах оплаты (src/components/PromoCheckoutNotice.tsx). */
+.lte-summary.promo-summary { border-color: rgba(198, 255, 61, 0.45); }
+.landing-root .pay-page__method-note,
+.dash-modal .pay-page__method-note {
+  margin-left: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.7;
+}
+.dash-modal .dash-modal__segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.dash-modal .dash-modal__segmented .dash-modal-btn {
+  min-height: 42px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+.dash-modal .dash-modal__segmented .dash-modal-btn[aria-pressed="true"] {
+  background: rgba(198, 255, 61, 0.1);
+  border-color: rgba(198, 255, 61, 0.55);
+  color: var(--dm-accent);
+}

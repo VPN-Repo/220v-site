@@ -191,6 +191,14 @@ export const refClickIpLimiter = makeRateLimit({
   message: { error: "Слишком много переходов по ссылке. Попробуйте позже." },
 });
 
+// Захват кода из промоссылки доступен гостям, поэтому ограничен по IP.
+export const promoCaptureIpLimiter = makeRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 120,
+  prefix: "v220:rl:promo:capture:ip:",
+  message: { error: "Слишком много переходов по промоссылкам. Попробуйте позже." },
+});
+
 // Обновление ссылки подключения ломает подключение на всех устройствах, поэтому строго: 3 раза в час на аккаунт.
 // Лимитер стоит после requireSession, ключ — UUID пользователя из сессии.
 export const subscriptionRevokeUserLimiter = makeRateLimit({
