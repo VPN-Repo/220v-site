@@ -3164,6 +3164,23 @@ body.landing-no-scroll { overflow: hidden; }
   }
 }
 
+/* Wide but short screens (an unfolded foldable such as iPhone Duo, ~890×626, or a small
+   tablet held sideways): keep the mascot next to the text, as on desktop, so the title
+   and the button stay on the first screen instead of below a phone-style mascot. */
+@media (min-width: 641px) and (max-width: 960px) and (orientation: landscape) and (min-height: 501px) {
+  .landing-root .hero__grid {
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 24px;
+    text-align: left;
+  }
+  .landing-root .hero__content { order: 1; }
+  .landing-root .hero__visual { order: 2; min-height: 0; }
+  .landing-root .hero__mascot { max-height: min(56vh, 380px); }
+  .landing-root .hero__desc { margin-left: 0; margin-right: 0; }
+  /* The column is wide enough for whole words: no "невиди-мыми". */
+  .landing-root .hero__title { hyphens: manual; }
+}
+
 /* Landscape phones: the mascot alone must not fill the first screen. */
 @media (max-width: 960px) and (orientation: landscape) and (max-height: 500px) {
   .landing-root .hero__visual { min-height: 0; }
@@ -4861,6 +4878,15 @@ body.landing-no-scroll { overflow: hidden; }
 .landing-root .login-card .login-support-hint {
   margin-top: 14px;
 }
+/* The address on its own line, so a long one is not broken across "…iclou / d.com". */
+.landing-root .login-sent-email--line { display: block; }
+/* "Отправить ещё раз" and "Изменить почту": one row, wrapping cleanly on narrow screens. */
+.landing-root .login-card .login-code-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 20px;
+}
 .landing-root .login-card .login-support-hint p {
   margin-top: 6px;
 }
@@ -4917,7 +4943,7 @@ body.landing-no-scroll { overflow: hidden; }
 .landing-root .modal__subtitle .login-sent-email {
   color: #fff;
   font-weight: 600;
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 .landing-root .login-card .login-delivery-warning {
   margin: -8px 0 18px;

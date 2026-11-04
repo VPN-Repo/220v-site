@@ -933,8 +933,11 @@ const Index = () => {
               ? `Пароль для ${normalizedEmail}`
               : (
                   <>
-                    Отправили на <b className="login-sent-email">{normalizedEmail}</b>. Введите код или нажмите
-                    «Войти» в письме
+                    Отправили на <b className="login-sent-email login-sent-email--line">
+                      {/* Break a long address before "@", not in the middle of the domain. */}
+                      {normalizedEmail.split("@")[0]}<wbr />{normalizedEmail.includes("@") ? `@${normalizedEmail.split("@").slice(1).join("@")}` : ""}
+                    </b>
+                    Введите код или нажмите «Войти» в письме
                   </>
                 )
         }
@@ -1116,7 +1119,6 @@ const Index = () => {
                   ? formatResendCooldownButtonLabel(resendCooldownSec)
                   : "Отправить ещё раз"}
               </button>
-              <span aria-hidden="true"> · </span>
               <button type="button" onClick={backToEmailStep} disabled={loading}>
                 Изменить почту
               </button>
