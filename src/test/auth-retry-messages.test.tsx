@@ -115,7 +115,7 @@ describe("login retry messages", () => {
         : fail(429, { error: "Слишком много запросов. Повторите через 7 мин.", code: "rate_limited", retryAfterSec: 420 }, 420);
     });
     await openCodeStep();
-    const resend = await screen.findByRole("button", { name: "Отправить код повторно" }, { timeout: 3000 });
+    const resend = await screen.findByRole("button", { name: "Отправить ещё раз" }, { timeout: 3000 });
     fireEvent.click(resend);
     await waitFor(() => expect(toastDescriptions()).toContain("Слишком много запросов. Повторите через 7 мин."));
     const held = screen.getByRole("button", { name: "Повторная отправка через 7 мин." });
@@ -148,8 +148,8 @@ describe("login retry messages", () => {
     expect(screen.queryByRole("status")).toBeNull();
     const input = document.querySelector<HTMLInputElement>('input[autocomplete="one-time-code"]');
     expect(input).not.toBeNull();
+    // Пятая цифра сама отправляет код на проверку.
     fireEvent.change(input!, { target: { value: "12345" } });
-    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
     await waitFor(() => expect(toastDescriptions()).toContain("Код не тот. Попыток осталось: 3 из 5"));
     expect(screen.getByRole("status")).toHaveTextContent("Попытка 2 из 5 не подошла. Осталось попыток: 3");
   });
@@ -163,7 +163,7 @@ describe("login retry messages", () => {
     });
     await openCodeStep();
     expect(toastDescriptions()).toContain("Код уже летит на user@gmail.com");
-    fireEvent.click(await screen.findByRole("button", { name: "Отправить код повторно" }, { timeout: 3000 }));
+    fireEvent.click(await screen.findByRole("button", { name: "Отправить ещё раз" }, { timeout: 3000 }));
     await waitFor(() =>
       expect(toastDescriptions()).toContain("Повторная отправка №2. Проверьте папку «Спам»."),
     );
@@ -181,7 +181,6 @@ describe("password dialog retry messages", () => {
     );
     render(<PasswordDialog open onOpenChange={vi.fn()} hasPassword={false} onChanged={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Новый пароль"), { target: { value: "abcde1" } });
-    fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "abcde1" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
     await waitFor(() => expect(sonner.error).toHaveBeenCalledWith("Повторный код — через 45 сек."));
   });
@@ -190,7 +189,6 @@ describe("password dialog retry messages", () => {
     vi.mocked(apiPost).mockResolvedValue(ok({ ok: true, retryAfterSec: 30, sendNumber: 3 }));
     render(<PasswordDialog open onOpenChange={vi.fn()} hasPassword onChanged={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Новый пароль"), { target: { value: "abcde1" } });
-    fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "abcde1" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
     await waitFor(() =>
       expect(sonner.success).toHaveBeenCalledWith("Повторная отправка №3. Проверьте папку «Спам»."),

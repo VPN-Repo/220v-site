@@ -52,8 +52,11 @@ describe("login by password", () => {
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/auth/send-code", { email: "user@gmail.com" }));
     expect(apiPost).toHaveBeenCalledWith("/auth/method", { email: "user@gmail.com" });
     expect(await screen.findByRole("heading", { name: "Введите код" })).toBeInTheDocument();
+    // Подсказка про поддержку свёрнута, раскрывается по «Не приходит код?».
+    expect(screen.queryByRole("link", { name: "support@220v.shop" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Не приходит код?" }));
     expect(screen.getByRole("link", { name: "support@220v.shop" })).toHaveAttribute("href", "mailto:support@220v.shop");
-    expect(screen.getByText(/нет доступа к почте/)).toBeInTheDocument();
+    expect(screen.getByText(/доступа к почте нет/)).toBeInTheDocument();
   });
 
   it("falls back to the emailed code when the method check fails", async () => {
@@ -107,7 +110,7 @@ describe("login by password", () => {
     expect(screen.queryByRole("button", { name: "Задать пароль" })).not.toBeInTheDocument();
   });
 
-  it("submits a new password only after two matching entries", async () => {
+  it("keeps the code screen free of password fields and verifies on the fifth digit", async () => {
     vi.mocked(apiPost).mockImplementation(async (path: string) => {
       if (path === "/auth/method") return { data: { hasPassword: false }, error: null, status: 200 };
       if (path === "/auth/send-code") return { data: { ok: true }, error: null, status: 200 };
@@ -116,19 +119,16 @@ describe("login by password", () => {
     });
 
     await openLoginAndEnterEmail("new@gmail.com");
-    fireEvent.click(await screen.findByRole("button", { name: "Задать пароль" }));
-    fireEvent.change(screen.getByLabelText("Новый пароль"), { target: { value: "abcde1" } });
-    fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "different1" } });
+    expect(await screen.findByRole("heading", { name: "Введите код" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Задать пароль" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Новый пароль")).not.toBeInTheDocument();
+
     const otpInput = document.querySelector<HTMLInputElement>('input[autocomplete="one-time-code"]')!;
     fireEvent.change(otpInput, { target: { value: "12345" } });
-    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
-    expect(apiPost).not.toHaveBeenCalledWith("/auth/verify", expect.anything());
-
-    fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "abcde1" } });
-    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
     await waitFor(() =>
-      expect(apiPost).toHaveBeenCalledWith("/auth/verify", { email: "new@gmail.com", code: "12345", newPassword: "abcde1" }),
+      expect(apiPost).toHaveBeenCalledWith("/auth/verify", { email: "new@gmail.com", code: "12345" }),
     );
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/dashboard"));
+    expect(localStorage.getItem("v220_last_login_email")).toBe("new@gmail.com");
   });
 });

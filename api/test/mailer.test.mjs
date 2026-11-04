@@ -28,6 +28,16 @@ describe("OTP email content", () => {
     assert.match(message.html, /support@220v\.shop/);
   });
 
+  it("adds a one-click login button only to the sign-in email", () => {
+    const url = "https://220v.shop/#login=abc_DEF-123456789012345";
+    const login = buildOtpMessage("12345", "login", url);
+    assert.match(login.html, /href="https:\/\/220v\.shop\/#login=abc_DEF-123456789012345"/);
+    assert.match(login.html, /Войти в 220v/);
+    assert.match(login.text, /Или войдите по ссылке: https:\/\/220v\.shop\/#login=/);
+    assert.doesNotMatch(buildOtpMessage("12345").html, /login=/);
+    assert.doesNotMatch(buildOtpMessage("12345", "password_change", url).html, /login=/);
+  });
+
   it("explains password change without sign-in instructions", () => {
     const message = buildOtpMessage("54321", "password_change");
     assert.equal(message.subject, "Код для смены пароля в 220v");

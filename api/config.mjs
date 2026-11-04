@@ -15,6 +15,8 @@ export const OTP_COOLDOWN_SEC = 30;
 // Window in which a repeated OTP email counts as a resend and goes through the backup SMTP.
 export const OTP_PROVIDER_WINDOW_SEC = 15 * 60;
 export const OTP_MAX_TRIES = 5;
+// Site address for the one-click login link in the code email.
+export const LOGIN_LINK_ORIGIN = (process.env.LOGIN_LINK_ORIGIN || "https://220v.shop").replace(/\/+$/, "");
 export const FETCH_TIMEOUT_MS = 8000;
 export const AUTH_EVENT_LIST_KEY = "v220:auth:events";
 export const AUTH_STATS_TYPE_KEY = "v220:auth:stats:type";

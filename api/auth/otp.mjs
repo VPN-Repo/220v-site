@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { OTP_COOLDOWN_SEC, OTP_MAX_TRIES, OTP_PROVIDER_WINDOW_SEC, OTP_TTL_SEC } from "../config.mjs";
 import { redis, isMockRedis } from "../redis.mjs";
 import { hashCode } from "./crypto.mjs";
-import { otpCooldownKey, otpKey } from "./keys.mjs";
+import { loginLinkKey, otpCooldownKey, otpKey } from "./keys.mjs";
 
 function parseOtpPayload(raw) {
   if (!raw || typeof raw !== "string") {
@@ -33,13 +33,41 @@ export async function cooldownRemainingSec(key) {
  * authVersion is the password credential version at issue time: a code sent
  * before a password set/change cannot be used to log in afterwards.
  */
-export async function putOtp(email, codeHash, owner, authVersion = 0) {
-  await redis.set(
-    otpKey(email),
-    JSON.stringify({ hash: codeHash, tries: 0, owner, authVersion }),
-    "EX",
-    OTP_TTL_SEC,
-  );
+export async function putOtp(email, codeHash, owner, authVersion = 0, linkHash = null) {
+  const payload = { hash: codeHash, tries: 0, owner, authVersion };
+  if (linkHash) payload.linkHash = linkHash;
+  await redis.set(otpKey(email), JSON.stringify(payload), "EX", OTP_TTL_SEC);
+  // The login link points at this code: a resend overwrites linkHash, so an older link stops working.
+  if (linkHash) await redis.set(loginLinkKey(linkHash), email, "EX", OTP_TTL_SEC);
+}
+
+/**
+ * One-shot check of a login link token from the code email. The link key is
+ * taken atomically (GET+DEL), and the pending code must still be the one the
+ * link was issued with.
+ *
+ * @returns {Promise<{ ok: true, email: string, authVersion: number } | { ok: false, reason: string }>}
+ */
+export async function takeLoginLink(token) {
+  const linkHash = hashCode(token);
+  const results = await redis.multi().get(loginLinkKey(linkHash)).del(loginLinkKey(linkHash)).exec();
+  return checkLinkAgainstOtp(results?.[0]?.[1], linkHash);
+}
+
+/** Same check as takeLoginLink without using the link up: for the "log in as …?" confirmation. */
+export async function peekLoginLink(token) {
+  const linkHash = hashCode(token);
+  return checkLinkAgainstOtp(await redis.get(loginLinkKey(linkHash)), linkHash);
+}
+
+async function checkLinkAgainstOtp(email, linkHash) {
+  if (typeof email !== "string" || !email) return { ok: false, reason: "missing" };
+  const { parsed } = parseOtpPayload(await redis.get(otpKey(email)));
+  const stored = typeof parsed?.linkHash === "string" ? parsed.linkHash : "";
+  const a = Buffer.from(stored, "hex");
+  const b = Buffer.from(linkHash, "hex");
+  if (!stored || a.length !== b.length || !timingSafeEqual(a, b)) return { ok: false, reason: "stale", email };
+  return { ok: true, email, authVersion: Number(parsed.authVersion) || 0 };
 }
 
 /** The owner token of the pending login code for email, or null. */

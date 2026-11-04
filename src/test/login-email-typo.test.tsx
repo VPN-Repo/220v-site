@@ -124,11 +124,10 @@ describe("login email typo hint", () => {
     expect(await screen.findByRole("heading", { name: "Введите код" })).toBeInTheDocument();
     const dialog = screen.getByRole("dialog");
     const sentTo = within(dialog).getByText("ivan@gmail.com", { selector: "b" });
-    expect(sentTo.closest("p")).toHaveTextContent("Код уже летит на ivan@gmail.com");
-    expect(within(dialog).getByText(/Ошиблись почтой\?/)).toBeInTheDocument();
+    expect(sentTo.closest("p")).toHaveTextContent("Отправили на ivan@gmail.com");
     expect(within(dialog).queryByTestId("email-typo-hint")).not.toBeInTheDocument();
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Исправить" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Изменить почту" }));
     expect(await screen.findByRole("heading", { name: "Вход в 220v" })).toBeInTheDocument();
     expect(screen.getByLabelText("Email")).toHaveValue("ivan@gmail.com");
   });

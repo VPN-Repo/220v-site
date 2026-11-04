@@ -58,6 +58,8 @@ import { happSubscriptionLink, oneClickHappSubscriptionUrl, isInstructionsPlatfo
 import LandingShell from "@/pages/landing/LandingShell";
 import LandingFooter from "@/pages/landing/LandingFooter";
 import ReferralPromoStrip from "@/components/ReferralPromoStrip";
+import PasswordNudge from "@/components/PasswordNudge";
+import { isPasswordNudgeDismissed } from "@/lib/passwordNudge";
 import DashboardSidebar, { type DashboardSidebarItem } from "@/components/DashboardSidebar";
 import PasswordDialog from "@/components/PasswordDialog";
 import RevokeSubscriptionDialog, { REVOKE_ACTION_LABEL } from "@/components/RevokeSubscriptionDialog";
@@ -229,6 +231,9 @@ const Dashboard = () => {
   const [subscriptionQrOpen, setSubscriptionQrOpen] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [hasPassword, setHasPassword] = useState(false);
+  // false, пока /me не ответил: до ответа плашку пароля не показываем, чтобы не мигала.
+  const [passwordKnown, setPasswordKnown] = useState(false);
+  const [passwordNudgeHidden, setPasswordNudgeHidden] = useState(isPasswordNudgeDismissed);
   const [revokeOpen, setRevokeOpen] = useState(false);
   const copySubscriptionButtonRef = useRef<HTMLButtonElement>(null);
   const autoPromoAttemptRef = useRef("");
@@ -304,6 +309,7 @@ const Dashboard = () => {
         if (fnError) throw fnError;
         if (data?.user) {
           setHasPassword(Boolean(data.hasPassword));
+          setPasswordKnown(true);
           const normalizedUser = normalizeUserData(data.user);
           if (!normalizedUser) {
             setError("Некорректный формат данных пользователя");
@@ -418,6 +424,7 @@ const Dashboard = () => {
       throw new Error(data?.error || "Не удалось получить данные");
     }
     setHasPassword(Boolean(data.hasPassword));
+    setPasswordKnown(true);
     applyUserProfile(data.user);
   }, [email, applyUserProfile]);
 
@@ -915,7 +922,14 @@ const Dashboard = () => {
               </span>
             </header>
 
-            <ReferralPromoStrip />
+            {passwordKnown && !hasPassword && !passwordNudgeHidden ? (
+              <PasswordNudge
+                onSetPassword={() => setPasswordDialogOpen(true)}
+                onDismiss={() => setPasswordNudgeHidden(true)}
+              />
+            ) : (
+              <ReferralPromoStrip />
+            )}
 
             <section className={`dash-hero ${isExpired ? "dash-hero--danger" : ""}`}>
               <div className="dash-hero__info">

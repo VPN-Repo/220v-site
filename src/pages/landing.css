@@ -4852,19 +4852,6 @@ body.landing-no-scroll { overflow: hidden; }
   border-color: rgba(198,255,61,0.55);
   box-shadow: 0 0 0 3px rgba(198, 255, 61, 0.12);
 }
-.landing-root .login-card .login-password-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-.landing-root .login-card .login-password-optional {
-  margin-top: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.landing-root .login-card .login-password-optional p,
 .landing-root .login-card .login-support-hint {
   font-size: 13px;
   line-height: 1.55;
@@ -4872,7 +4859,28 @@ body.landing-no-scroll { overflow: hidden; }
   text-align: center;
 }
 .landing-root .login-card .login-support-hint {
-  margin-top: 18px;
+  margin-top: 14px;
+}
+.landing-root .login-card .login-support-hint p {
+  margin-top: 6px;
+}
+.landing-root .login-card .login-support-hint__toggle {
+  position: relative;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+@media (pointer: coarse) {
+  .landing-root .login-card .login-support-hint__toggle::after {
+    content: "";
+    position: absolute;
+    inset: -12px -8px;
+  }
 }
 .landing-root .login-card .login-typo-hint {
   margin-top: 8px;

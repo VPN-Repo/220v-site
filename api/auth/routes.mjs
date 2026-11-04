@@ -6,6 +6,7 @@ import {
   OTP_COOLDOWN_SEC,
   OTP_MAX_TRIES,
   OTP_PENDING_COOKIE,
+  LOGIN_LINK_ORIGIN,
   OTP_TTL_SEC,
   SESSION_TTL_SEC,
 } from "../config.mjs";
@@ -30,6 +31,7 @@ import {
   deliveryStatusIpLimiter,
 } from "../http/rateLimit.mjs";
 import { getDeliveryWarning } from "../email/unisenderBounces.mjs";
+import { requireSameOriginJson } from "../http/sameOrigin.mjs";
 import {
   base64url,
   emailHash,
@@ -54,6 +56,8 @@ import {
   pickOtpMailProvider,
   putOtp,
   recordOtpMailSend,
+  peekLoginLink,
+  takeLoginLink,
   verifyOtp,
 } from "./otp.mjs";
 import {
@@ -63,6 +67,7 @@ import {
   passwordChangeSchema,
   passwordLoginSchema,
   sendCodeSchema,
+  verifyLinkSchema,
   verifySchema,
 } from "./schemas.mjs";
 import {
@@ -97,6 +102,19 @@ import {
  */
 export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isReferralPointsBlocked }) {
   const router = Router();
+
+  // Login endpoints without a session have no CSRF token: same-origin JSON only.
+  router.use(
+    [
+      "/api/auth/method",
+      "/api/auth/login-password",
+      "/api/auth/send-code",
+      "/api/auth/verify",
+      "/api/auth/link-info",
+      "/api/auth/verify-link",
+    ],
+    requireSameOriginJson,
+  );
 
   // The first OTP email in the window goes through SES, a resend through the
   // backup SMTP. Redis trouble here must not block sending: fall back to primary.
@@ -297,8 +315,10 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
 
         const code = generateOtpCode();
         const hash = hashCode(code);
+        // The email also carries a one-click login link bound to this code.
+        const linkToken = base64url(randomBytes(24));
         const authVersion = credentialVersion(await getCredential(email));
-        await putOtp(email, hash, owner, authVersion);
+        await putOtp(email, hash, owner, authVersion, hashCode(linkToken));
         const [otpDebug, cooldownDebug] = await Promise.all([
           getOtpDebugSnapshot(email),
           getCooldownDebugSnapshot(email),
@@ -315,7 +335,10 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
 
         const sendsKey = otpMailSendsKey(email);
         const requestedProvider = await chooseMailProvider(req, sendsKey);
-        const mailResult = await mailer.sendOtpEmail({ email, code, provider: requestedProvider });
+        // The token goes in the fragment: browsers never send it to the server,
+        // so it stays out of access logs and Referer headers.
+        const loginUrl = `${LOGIN_LINK_ORIGIN}/#login=${linkToken}`;
+        const mailResult = await mailer.sendOtpEmail({ email, code, loginUrl, provider: requestedProvider });
 
         if (!mailResult.ok) {
           await clearOtpAndCooldown(email, owner);
@@ -393,6 +416,123 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
     }
   });
 
+  // Shared tail of a confirmed login (code or email link): load the profile,
+  // write the session and credit the referral.
+  const finishLogin = async (req, res, { email, authVersion, newPassword, referrerUuid, fingerprint, extraResponse }) => {
+    await recordDailyAuth("confirmed", email, req);
+
+    if (newPassword && authVersion !== 0) {
+      return clientError(res, 409, "Пароль уже задан. Войдите и измените его в личном кабинете");
+    }
+
+    let referralBlocked = false;
+    if (referrerUuid && isReferralPointsBlocked) {
+      try {
+        referralBlocked = await isReferralPointsBlocked(referrerUuid);
+      } catch (err) {
+        req.log.warn({ err, referrerUuid }, "referral blocked status check failed");
+      }
+    }
+
+    let profile;
+    try {
+      profile = await loadUserProfile(email, req, referralBlocked ? undefined : referrerUuid);
+    } catch (err) {
+      const status = isTimeoutError(err) ? timeoutStatusCode(err) : err.status || 502;
+      await recordAuthEvent("verify_profile_failed", req, { email, status: "failed" });
+      return clientError(
+        res,
+        status,
+        publicMessageFromErr(err, "Не удалось завершить вход", { context: "авторизация" }),
+      );
+    }
+
+    const userUuid = extractUserUuid(profile);
+    if (!userUuid) {
+      await recordAuthEvent("verify_profile_invalid", req, { email, status: "failed" });
+      return clientError(res, 502, "Не удалось завершить вход");
+    }
+
+    const sid = base64url(randomBytes(32));
+    const csrf = base64url(randomBytes(32));
+    const expAt = Date.now() + SESSION_TTL_SEC * 1000;
+    const session = {
+      userUuid,
+      email,
+      csrf,
+      expAt,
+      authVersion: authVersion + (newPassword ? 1 : 0),
+    };
+
+    // The session is written only if the password credential is still the
+    // version the code was issued for (and, for a new password, still absent).
+    const outcome = newPassword
+      ? await saveInitialPassword(
+          email,
+          sid,
+          { userUuid, version: 1, ...(await hashPassword(newPassword)) },
+          session,
+          SESSION_TTL_SEC,
+        )
+      : await saveLoginSession(email, userUuid, authVersion, sid, session, SESSION_TTL_SEC);
+    if (outcome !== "ok") {
+      await deleteOtp(email);
+      await recordAuthEvent("verify_auth_changed", req, { email, status: "failed" });
+      return clientError(res, 409, "Данные входа изменились. Запросите новый код");
+    }
+    setSessionCookies(res, sid, csrf);
+    await deleteOtp(email);
+    if (newPassword) {
+      await recordAuthEvent("password_set", req, { email, userUuid, status: "ok" });
+    }
+
+    req.log.info(
+      { emailHash: emailHash(email), userUuidPrefix: userUuid.slice(0, 8) },
+      "login ok",
+    );
+    await recordAuthEvent("login_ok", req, { email, userUuid, status: "ok" });
+
+    if (referrerUuid) {
+      const refCredit = profile?.referrer_credit || profile?.user?.referrer_credit;
+      if (referralBlocked) {
+        await recordReferralEvent("ref_credit_skipped", req, {
+          referrerUuid,
+          referredEmailHash: emailHash(email),
+          referredUuidPrefix: userUuid.slice(0, 8),
+          reason: "referrer_points_blocked",
+          selfReferral: referrerUuid === userUuid,
+          fingerprint: fingerprint,
+        });
+      } else if (refCredit && refCredit.credited === false) {
+        await recordReferralEvent("ref_credit_skipped", req, {
+          referrerUuid,
+          referredEmailHash: emailHash(email),
+          referredUuidPrefix: userUuid.slice(0, 8),
+          reason: refCredit.reason || "unknown",
+          selfReferral: referrerUuid === userUuid,
+          fingerprint: fingerprint,
+        });
+      } else if (referrerUuid === userUuid) {
+        await recordReferralEvent("ref_self_referral", req, {
+          referrerUuid,
+          referredEmailHash: emailHash(email),
+          referredUuidPrefix: userUuid.slice(0, 8),
+          selfReferral: true,
+          fingerprint: fingerprint,
+        });
+      } else {
+        await recordReferralEvent("ref_verify_ok", req, {
+          referrerUuid,
+          referredEmailHash: emailHash(email),
+          referredUuidPrefix: userUuid.slice(0, 8),
+          fingerprint: fingerprint,
+        });
+      }
+    }
+
+    return res.json(extraResponse ? { ...profile, ...extraResponse } : profile);
+  };
+
   router.post("/api/auth/verify", verifyIpLimiter, async (req, res) => {
     try {
       const attemptEmail = emailSchema.safeParse(req.body?.email);
@@ -464,120 +604,57 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
         return clientError(res, otpResult.status, messages[otpResult.reason] || "Неверный код");
       }
 
-      await recordDailyAuth("confirmed", email, req);
-
-      const newPassword = parsed.data.newPassword;
-      if (newPassword && otpResult.authVersion !== 0) {
-        return clientError(res, 409, "Пароль уже задан. Войдите и измените его в личном кабинете");
-      }
-
-      const referrerUuid = parsed.data.ref_uuid;
-      let referralBlocked = false;
-      if (referrerUuid && isReferralPointsBlocked) {
-        try {
-          referralBlocked = await isReferralPointsBlocked(referrerUuid);
-        } catch (err) {
-          req.log.warn({ err, referrerUuid }, "referral blocked status check failed");
-        }
-      }
-
-      let profile;
-      try {
-        profile = await loadUserProfile(email, req, referralBlocked ? undefined : referrerUuid);
-      } catch (err) {
-        const status = isTimeoutError(err) ? timeoutStatusCode(err) : err.status || 502;
-        await recordAuthEvent("verify_profile_failed", req, { email, status: "failed" });
-        return clientError(
-          res,
-          status,
-          publicMessageFromErr(err, "Не удалось завершить вход", { context: "авторизация" }),
-        );
-      }
-
-      const userUuid = extractUserUuid(profile);
-      if (!userUuid) {
-        await recordAuthEvent("verify_profile_invalid", req, { email, status: "failed" });
-        return clientError(res, 502, "Не удалось завершить вход");
-      }
-
-      const sid = base64url(randomBytes(32));
-      const csrf = base64url(randomBytes(32));
-      const expAt = Date.now() + SESSION_TTL_SEC * 1000;
-      const session = {
-        userUuid,
+      return await finishLogin(req, res, {
         email,
-        csrf,
-        expAt,
-        authVersion: otpResult.authVersion + (newPassword ? 1 : 0),
-      };
+        authVersion: otpResult.authVersion,
+        newPassword: parsed.data.newPassword,
+        referrerUuid: parsed.data.ref_uuid,
+        fingerprint: parsed.data.fingerprint,
+      });
+    } catch (err) {
+      return serverError(res, req, err);
+    }
+  });
 
-      // The session is written only if the password credential is still the
-      // version the code was issued for (and, for a new password, still absent).
-      const outcome = newPassword
-        ? await saveInitialPassword(
-            email,
-            sid,
-            { userUuid, version: 1, ...(await hashPassword(newPassword)) },
-            session,
-            SESSION_TTL_SEC,
-          )
-        : await saveLoginSession(email, userUuid, otpResult.authVersion, sid, session, SESSION_TTL_SEC);
-      if (outcome !== "ok") {
-        await deleteOtp(email);
-        await recordAuthEvent("verify_auth_changed", req, { email, status: "failed" });
-        return clientError(res, 409, "Данные входа изменились. Запросите новый код");
+  // "Log in as iv***@gmail.com?" before the link is used: mail scanners that open
+  // links do not log anyone in, and a link sent by someone else shows whose account it is.
+  router.post("/api/auth/link-info", verifyIpLimiter, async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      const parsed = verifyLinkSchema.safeParse(req.body);
+      const link = parsed.success ? await peekLoginLink(parsed.data.token) : { ok: false };
+      if (!link.ok) return clientError(res, 400, "Ссылка устарела или уже использована. Запросите новый код");
+      return res.json({ maskedEmail: maskEmail(link.email) });
+    } catch (err) {
+      return serverError(res, req, err);
+    }
+  });
+
+  // One-click login from the code email. The link works once, only while its
+  // code is the latest one for the address, and never sets a password.
+  router.post("/api/auth/verify-link", verifyIpLimiter, async (req, res) => {
+    try {
+      const parsed = verifyLinkSchema.safeParse(req.body);
+      if (!parsed.success) {
+        await recordAuthEvent("verify_link_invalid_request", req, { status: "rejected" });
+        return clientError(res, 400, "Ссылка устарела. Запросите новый код");
       }
-      setSessionCookies(res, sid, csrf);
-      await deleteOtp(email);
-      if (newPassword) {
-        await recordAuthEvent("password_set", req, { email, userUuid, status: "ok" });
+      const link = await takeLoginLink(parsed.data.token);
+      if (!link.ok) {
+        await recordAuthEvent(link.reason === "stale" ? "verify_link_stale" : "verify_link_missing", req, {
+          ...(link.email ? { email: link.email } : {}),
+          status: "failed",
+        });
+        return clientError(res, 400, "Ссылка устарела или уже использована. Запросите новый код");
       }
-
-      req.log.info(
-        { emailHash: emailHash(email), userUuidPrefix: userUuid.slice(0, 8) },
-        "login ok",
-      );
-      await recordAuthEvent("login_ok", req, { email, userUuid, status: "ok" });
-
-      if (referrerUuid) {
-        const refCredit = profile?.referrer_credit || profile?.user?.referrer_credit;
-        if (referralBlocked) {
-          await recordReferralEvent("ref_credit_skipped", req, {
-            referrerUuid,
-            referredEmailHash: emailHash(email),
-            referredUuidPrefix: userUuid.slice(0, 8),
-            reason: "referrer_points_blocked",
-            selfReferral: referrerUuid === userUuid,
-            fingerprint: parsed.data.fingerprint,
-          });
-        } else if (refCredit && refCredit.credited === false) {
-          await recordReferralEvent("ref_credit_skipped", req, {
-            referrerUuid,
-            referredEmailHash: emailHash(email),
-            referredUuidPrefix: userUuid.slice(0, 8),
-            reason: refCredit.reason || "unknown",
-            selfReferral: referrerUuid === userUuid,
-            fingerprint: parsed.data.fingerprint,
-          });
-        } else if (referrerUuid === userUuid) {
-          await recordReferralEvent("ref_self_referral", req, {
-            referrerUuid,
-            referredEmailHash: emailHash(email),
-            referredUuidPrefix: userUuid.slice(0, 8),
-            selfReferral: true,
-            fingerprint: parsed.data.fingerprint,
-          });
-        } else {
-          await recordReferralEvent("ref_verify_ok", req, {
-            referrerUuid,
-            referredEmailHash: emailHash(email),
-            referredUuidPrefix: userUuid.slice(0, 8),
-            fingerprint: parsed.data.fingerprint,
-          });
-        }
-      }
-
-      return res.json(profile);
+      await recordAuthEvent("verify_link_ok", req, { email: link.email, status: "ok" });
+      return await finishLogin(req, res, {
+        email: link.email,
+        authVersion: link.authVersion,
+        referrerUuid: parsed.data.ref_uuid,
+        fingerprint: parsed.data.fingerprint,
+        extraResponse: { loginEmail: link.email },
+      });
     } catch (err) {
       return serverError(res, req, err);
     }

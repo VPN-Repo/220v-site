@@ -16,7 +16,7 @@ const { app } = await import("../index.mjs");
 const { redis } = await import("../redis.mjs");
 const { hashCode } = await import("../auth/crypto.mjs");
 const { saveSession } = await import("../auth/session.mjs");
-const { otpCooldownKey, otpKey, refUserStatusKey } = await import("../auth/keys.mjs");
+const { loginLinkKey, otpCooldownKey, otpKey, refUserStatusKey } = await import("../auth/keys.mjs");
 const { acquireOtpCooldown, clearOtpAndCooldown, putOtp } = await import("../auth/otp.mjs");
 const { queryReferralEvents } = await import("../referrals/events.mjs");
 const originalFetch = globalThis.fetch;
@@ -144,6 +144,71 @@ describe("auth integration", () => {
     const otp = JSON.parse(rawOtp);
     assert.equal(otp.owner, "owner-new");
     assert.equal(await redis.get(otpCooldownKey(email)), "owner-new");
+  });
+
+  const mockProfile = (userUuid) => {
+    globalThis.fetch = async (url) => {
+      const href = String(url);
+      if (href.endsWith("/v1/auth/session")) {
+        return Response.json({ exists: true, user: { userUuid, plan: "Premium", tariff: "1month" } });
+      }
+      if (href.includes("/v1/hwid/devices/")) return Response.json({ devices: [], total: 0 });
+      throw new Error(`Unexpected fetch: ${href}`);
+    };
+  };
+
+  it("logs in once by the emailed link and burns the code with it", async () => {
+    const email = "link@example.com";
+    const token = "linkTokenAbcdefghijklmnop_123";
+    const userUuid = "b6810e6c-8a69-42b1-b298-8b07d8378987";
+    await putOtp(email, hashCode("12345"), "test-owner", 0, hashCode(token));
+    mockProfile(userUuid);
+
+    // The confirmation screen learns the masked address without using the link up.
+    const info = await requestJson("POST", "/api/auth/link-info", { token });
+    assert.equal(info.status, 200);
+    assert.equal(info.body.maskedEmail, "li***@example.com");
+    assert.ok(await redis.get(loginLinkKey(hashCode(token))));
+
+    const first = await requestJson("POST", "/api/auth/verify-link", { token });
+
+    assert.equal(first.status, 200);
+    assert.equal(first.body.user.userUuid, userUuid);
+    assert.equal(first.body.loginEmail, email);
+    assert.match(first.headers.get("set-cookie") || "", /v220_sid=/);
+    assert.equal(await redis.get(otpKey(email)), null);
+    assert.equal(await redis.get(loginLinkKey(hashCode(token))), null);
+
+    const again = await requestJson("POST", "/api/auth/verify-link", { token });
+    assert.equal(again.status, 400);
+    assert.equal((await requestJson("POST", "/api/auth/link-info", { token })).status, 400);
+    const byCode = await requestJson("POST", "/api/auth/verify", { email, code: "12345" });
+    assert.equal(byCode.status, 400);
+  });
+
+  it("rejects a link from an older email after the code was resent", async () => {
+    const email = "relink@example.com";
+    const oldToken = "oldTokenAbcdefghijklmnopqrs_1";
+    const newToken = "newTokenAbcdefghijklmnopqrs_2";
+    await putOtp(email, hashCode("11111"), "owner-old", 0, hashCode(oldToken));
+    await putOtp(email, hashCode("22222"), "owner-new", 0, hashCode(newToken));
+    mockProfile("b6810e6c-8a69-42b1-b298-8b07d8378987");
+
+    assert.equal((await requestJson("POST", "/api/auth/link-info", { token: oldToken })).status, 400);
+    const stale = await requestJson("POST", "/api/auth/verify-link", { token: oldToken });
+    assert.equal(stale.status, 400);
+    assert.ok(await redis.get(otpKey(email)), "the newer code stays usable");
+
+    const fresh = await requestJson("POST", "/api/auth/verify-link", { token: newToken });
+    assert.equal(fresh.status, 200);
+  });
+
+  it("rejects malformed and unknown link tokens", async () => {
+    assert.equal((await requestJson("POST", "/api/auth/verify-link", { token: "short" })).status, 400);
+    assert.equal(
+      (await requestJson("POST", "/api/auth/verify-link", { token: "unknownTokenAbcdefghijklmnop" })).status,
+      400,
+    );
   });
 
   it("keeps a correct OTP retryable when profile load fails", async () => {

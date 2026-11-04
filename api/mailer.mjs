@@ -231,8 +231,10 @@ function buildTransport(provider = MAIL_PROVIDERS.PRIMARY) {
 
 // purpose: "login" (default) — вход по коду; "password_change" — подтверждение
 // установки/смены пароля в личном кабинете.
-export function buildOtpMessage(code, purpose = "login") {
+// loginUrl (login only): one-click link to the site, bound to the same code.
+export function buildOtpMessage(code, purpose = "login", loginUrl = null) {
   const safeCode = escapeHtml(code);
+  const safeLoginUrl = loginUrl && purpose !== "password_change" ? escapeHtml(loginUrl) : "";
   const changingPassword = purpose === "password_change";
   const subject = changingPassword ? "Код для смены пароля в 220v" : `Ваш код для входа в 220v`;
   const copy = changingPassword
@@ -264,6 +266,7 @@ export function buildOtpMessage(code, purpose = "login") {
     `Ваш код подтверждения: ${code}`,
     "",
     copy.instruction,
+    ...(safeLoginUrl ? ["", `Или войдите по ссылке: ${loginUrl}`] : []),
     "",
     "Не сообщайте код никому — команда 220v никогда не просит его по почте или в чате.",
     copy.unrequested,
@@ -330,6 +333,17 @@ export function buildOtpMessage(code, purpose = "login") {
                       </div>
                     </td>
                   </tr>
+                  ${
+                    safeLoginUrl
+                      ? `
+                  <tr>
+                    <td style="padding:0 24px 28px 24px;text-align:center;">
+                      <div style="font-size:13px;color:#9a9a9a;line-height:1.6;margin-bottom:12px;">или войдите одним нажатием</div>
+                      <a href="${safeLoginUrl}" style="display:inline-block;padding:14px 36px;background:#c6ff3d;border-radius:999px;font-size:16px;font-weight:800;color:#0a0a0a;text-decoration:none;">Войти в 220v</a>
+                    </td>
+                  </tr>`
+                      : ""
+                  }
                 </table>
 
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px;">
@@ -488,7 +502,7 @@ async function sendViaProvider({ provider, email, recipientDomain, content, maxA
  *
  * @returns {Promise<{ ok: true, messageId: string | null, provider: string, failover: boolean } | { ok: false, error: string, detail?: string, provider?: string, failover?: boolean }>}
  */
-export async function sendOtpEmail({ email, code, purpose = "login", provider = MAIL_PROVIDERS.PRIMARY }) {
+export async function sendOtpEmail({ email, code, purpose = "login", loginUrl = null, provider = MAIL_PROVIDERS.PRIMARY }) {
   const recipientDomain =
     typeof email === "string" && email.includes("@") ? email.slice(email.indexOf("@") + 1) : null;
 
@@ -508,7 +522,7 @@ export async function sendOtpEmail({ email, code, purpose = "login", provider = 
     ? [chosen, chosen === MAIL_PROVIDERS.BACKUP ? MAIL_PROVIDERS.PRIMARY : MAIL_PROVIDERS.BACKUP]
     : [MAIL_PROVIDERS.PRIMARY];
 
-  const { subject, text, html } = buildOtpMessage(code, purpose);
+  const { subject, text, html } = buildOtpMessage(code, purpose, loginUrl);
   const content = { subject, text, html, purpose };
 
   // Без резерва — до двух попыток через SES: если соединение из пула

@@ -45,6 +45,16 @@ export const verifySchema = z.object({
   newPassword: passwordSchema.optional(),
 });
 
+export const verifyLinkSchema = z.object({
+  token: z.string().trim().regex(/^[A-Za-z0-9_-]{20,64}$/, "Invalid token"),
+  ref_uuid: z
+    .string()
+    .trim()
+    .regex(REF_UUID_RE, "Invalid ref_uuid")
+    .optional(),
+  fingerprint: z.string().trim().max(256).optional(),
+});
+
 export const passwordChangeSchema = z.object({
   code: z.string().trim().regex(/^\d{5}$/, "Code must be 5 digits"),
   newPassword: passwordSchema,

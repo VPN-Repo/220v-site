@@ -11,30 +11,31 @@ describe("password settings", () => {
     vi.clearAllMocks();
   });
 
-  it("requires matching passwords and the emailed code before saving", async () => {
+  it("asks for one password and the emailed code before saving", async () => {
     const onChanged = vi.fn();
     const onOpenChange = vi.fn();
     vi.mocked(apiPost).mockResolvedValue({ data: { ok: true }, error: null, status: 200 });
     render(<PasswordDialog open onOpenChange={onOpenChange} hasPassword={false} onChanged={onChanged} />);
 
     expect(screen.getByRole("heading", { name: "Задать пароль" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "support@220v.shop" })).toHaveAttribute("href", "mailto:support@220v.shop");
+    expect(screen.queryByLabelText("Повторите пароль")).not.toBeInTheDocument();
 
-    const passwordInputs = [screen.getByLabelText("Новый пароль"), screen.getByLabelText("Повторите пароль")];
-    const visibilityButtons = screen.getAllByRole("button", { name: "Показать пароль" });
-    expect(visibilityButtons).toHaveLength(2);
-    expect(passwordInputs.every((input) => input.getAttribute("type") === "password")).toBe(true);
-    fireEvent.click(visibilityButtons[0]);
-    expect(passwordInputs.every((input) => input.getAttribute("type") === "text")).toBe(true);
+    const passwordInput = screen.getByLabelText("Новый пароль");
+    expect(passwordInput).toHaveAttribute("type", "password");
+    fireEvent.click(screen.getByRole("button", { name: "Показать пароль" }));
+    expect(passwordInput).toHaveAttribute("type", "text");
 
-    fireEvent.change(screen.getByLabelText("Новый пароль"), { target: { value: "abcde1" } });
-    fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "different-password1" } });
+    fireEvent.change(passwordInput, { target: { value: "abcdef" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
     expect(apiPost).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "abcde1" } });
+    fireEvent.change(passwordInput, { target: { value: "abcde1" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/auth/password/send-code", {}));
+    expect(await screen.findByRole("link", { name: "support@220v.shop" })).toHaveAttribute(
+      "href",
+      "mailto:support@220v.shop",
+    );
     fireEvent.change(await screen.findByLabelText("Код из email"), { target: { value: "12345" } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить пароль" }));
     await waitFor(() =>

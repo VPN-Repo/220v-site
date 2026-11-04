@@ -19,7 +19,6 @@ const CODE_RE = /^\d{5}$/;
 /** Установка/смена пароля из личного кабинета: подтверждается кодом из письма. */
 export default function PasswordDialog({ open, onOpenChange, hasPassword, onChanged }: Props) {
   const [newPassword, setNewPassword] = useState("");
-  const [repeatPassword, setRepeatPassword] = useState("");
   const [code, setCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [sent, setSent] = useState(false);
@@ -40,7 +39,6 @@ export default function PasswordDialog({ open, onOpenChange, hasPassword, onChan
       return;
     }
     setNewPassword("");
-    setRepeatPassword("");
     setCode("");
     setShowPassword(false);
     setSent(false);
@@ -52,10 +50,6 @@ export default function PasswordDialog({ open, onOpenChange, hasPassword, onChan
   const validPassword = () => {
     if (!isValidNewPassword(newPassword)) {
       toast.error(PASSWORD_REQUIREMENTS);
-      return false;
-    }
-    if (newPassword !== repeatPassword) {
-      toast.error("Пароли не совпадают");
       return false;
     }
     return true;
@@ -115,7 +109,9 @@ export default function PasswordDialog({ open, onOpenChange, hasPassword, onChan
         <DialogHeader>
           <DialogTitle>{hasPassword ? "Сменить пароль" : "Задать пароль"}</DialogTitle>
           <DialogDescription>
-            Введите пароль из 6–128 символов с буквами и цифрами дважды и подтвердите его кодом из письма.
+            {hasPassword
+              ? "Придумайте новый пароль и подтвердите его кодом из письма."
+              : "С паролем можно входить без кода из письма. Подтвердим его кодом на почту."}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -130,7 +126,7 @@ export default function PasswordDialog({ open, onOpenChange, hasPassword, onChan
               type={showPassword ? "text" : "password"}
               autoComplete="new-password"
               aria-label="Новый пароль"
-              placeholder="6–128 символов, буквы и цифры"
+              placeholder="Новый пароль"
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
               className="dash-modal__input"
@@ -142,23 +138,7 @@ export default function PasswordDialog({ open, onOpenChange, hasPassword, onChan
               disabled={loading}
             />
           </div>
-          <div className="password-field">
-            <input
-              type={showPassword ? "text" : "password"}
-              autoComplete="new-password"
-              aria-label="Повторите пароль"
-              placeholder="Повторите пароль"
-              value={repeatPassword}
-              onChange={(event) => setRepeatPassword(event.target.value)}
-              className="dash-modal__input"
-              disabled={loading}
-            />
-            <PasswordVisibilityButton
-              visible={showPassword}
-              onClick={() => setShowPassword(!showPassword)}
-              disabled={loading}
-            />
-          </div>
+          <p className="dash-modal__hint">Минимум 6 символов, хотя бы одна буква и одна цифра</p>
           {sent ? (
             <>
               <input
@@ -186,10 +166,11 @@ export default function PasswordDialog({ open, onOpenChange, hasPassword, onChan
               </button>
             </>
           ) : null}
-          <p className="dash-modal__hint">
-            Не приходит код? Напишите в поддержку на <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> — после проверки
-            пароль установят за вас.
-          </p>
+          {sent ? (
+            <p className="dash-modal__hint">
+              Не приходит код? Напишите на <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> — поможем.
+            </p>
+          ) : null}
           <button type="submit" className="dash-modal-btn dash-modal-btn--primary" disabled={loading}>
             {loading ? "Подождите..." : sent ? "Сохранить пароль" : "Отправить код"}
           </button>

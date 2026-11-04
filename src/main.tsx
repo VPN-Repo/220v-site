@@ -1,3 +1,5 @@
+// Первым: забирает токен входа из адреса до остального кода.
+import "./lib/loginLink";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";

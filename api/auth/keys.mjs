@@ -7,6 +7,9 @@ export const otpKey = (email) => `${PREFIX}otp:${email}`;
 export const otpCooldownKey = (email) => `${PREFIX}otp:cooldown:${email}`;
 // Password credentials are keyed by an email hash so the address is not stored in the key name.
 export const credentialKey = (email) => `${PREFIX}cred:${createHash("sha256").update(email).digest("hex")}`;
+// One-click login link from the code email: sha256(token) -> email. Outside the
+// `otp:` namespace so admin OTP scans do not read it as a code.
+export const loginLinkKey = (tokenHash) => `${PREFIX}loginlink:${tokenHash}`;
 export const passwordOtpKey = (sid) => `${PREFIX}password:otp:${sid}`;
 export const passwordCooldownKey = (sid) => `${PREFIX}password:otp:cooldown:${sid}`;
 // Successful OTP email sends in the provider window (a resend goes through the backup SMTP).

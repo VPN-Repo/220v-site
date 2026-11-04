@@ -27,7 +27,9 @@ import {
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import PasswordVisibilityButton from "@/components/PasswordVisibilityButton";
 import { EmailTypoHint } from "@/components/EmailTypoHint";
-import { isValidNewPassword, PASSWORD_REQUIREMENTS, SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/password";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/password";
+import { readLastLoginEmail, rememberLoginEmail } from "@/lib/loginEmail";
+import { clearLoginLinkToken, getLoginLinkToken } from "@/lib/loginLink";
 
 import LandingShell from "@/pages/landing/LandingShell";
 import LandingHeader from "@/pages/landing/LandingHeader";
@@ -122,6 +124,37 @@ function asDeliveryWarning(value: unknown): DeliveryWarning | null {
   return typeof category === "string" && typeof message === "string" && message ? { category, message } : null;
 }
 
+/** Свёрнутая подсказка про поддержку под формой входа: вопрос-ссылка, по нажатию — текст. */
+function SupportHint({
+  open,
+  onToggle,
+  question,
+  tip,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  question: string;
+  tip?: string;
+}) {
+  return (
+    <div className="login-support-hint">
+      <button type="button" className="login-support-hint__toggle" aria-expanded={open} onClick={onToggle}>
+        {question}
+      </button>
+      {open ? (
+        <p>
+          {tip ? <>{tip} </> : null}
+          Если доступа к почте нет, а аккаунт уже есть, напишите на{" "}
+          <a href={SUPPORT_MAILTO} className="modal__link">
+            {SUPPORT_EMAIL}
+          </a>{" "}
+          — после проверки поможем войти.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 // Pause after the last keystroke before the email typo hint appears.
 const EMAIL_HINT_DELAY_MS = 800;
 
@@ -129,11 +162,15 @@ const Index = () => {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [repeatPassword, setRepeatPassword] = useState("");
-  const [settingPassword, setSettingPassword] = useState(false);
-  const [hasPassword, setHasPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // «Не приходит код?» / «Забыли пароль?» — подсказка про поддержку свёрнута по умолчанию.
+  const [supportHintOpen, setSupportHintOpen] = useState(false);
+  // Токен из ссылки «Войти» в письме; адрес от него уже очищен (см. lib/loginLink).
+  const [linkToken] = useState(getLoginLinkToken);
+  // Подтверждение «Войти как iv***@gmail.com?»: ссылка срабатывает только по нажатию.
+  const [linkConfirm, setLinkConfirm] = useState<{ maskedEmail: string } | null>(null);
+  // Код, который уже отправляли на проверку: автопроверка не повторяет его после ошибки.
+  const lastVerifiedCodeRef = useRef("");
   const [loginStep, setLoginStep] = useState<LoginStep>("email");
   // The typo hint shows once typing pauses or the field loses focus; it never blocks sending.
   const [emailSettled, setEmailSettled] = useState(false);
@@ -204,6 +241,31 @@ const Index = () => {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (linkToken) {
+        const info = await apiPost<{ maskedEmail?: unknown }>("/auth/link-info", { token: linkToken });
+        if (cancelled) return;
+        if (!info.error && typeof info.data?.maskedEmail === "string") {
+          setLinkConfirm({ maskedEmail: info.data.maskedEmail });
+          setSessionReady(true);
+          return;
+        }
+        clearLoginLinkToken();
+        // Ссылка устарела или уже использована: если сессия есть, просто входим, иначе — окно входа.
+        const me = await apiGet<{ user?: unknown }>("/me");
+        if (cancelled) return;
+        if (!me.error && me.data?.user) {
+          navigate(hrefAfterLoginFromPendingSearch(), { replace: true });
+          return;
+        }
+        setSessionReady(true);
+        toast({
+          title: "Ссылка не сработала",
+          description: authErrorMessage(info, "Ссылка устарела. Запросите новый код"),
+          variant: "destructive",
+        });
+        openLogin();
+        return;
+      }
       const { data, error } = await apiGet<{ user?: unknown }>("/me");
       if (cancelled) return;
       if (!error && data?.user) {
@@ -215,6 +277,8 @@ const Index = () => {
     return () => {
       cancelled = true;
     };
+    // Один раз при загрузке страницы.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
   useEffect(() => {
@@ -275,10 +339,8 @@ const Index = () => {
 
   const resetPasswordFields = () => {
     setPassword("");
-    setNewPassword("");
-    setRepeatPassword("");
-    setSettingPassword(false);
     setShowPassword(false);
+    setSupportHintOpen(false);
   };
 
   // Fix from the code screen: back to the email step with the corrected address.
@@ -296,7 +358,7 @@ const Index = () => {
     setLoginStep("email");
     setCode("");
     resetPasswordFields();
-    setHasPassword(false);
+    setEmail((current) => current || readLastLoginEmail());
     setResendCooldownSec(0);
     setCodeAttempts(null);
     setDeliveryWarning(null);
@@ -362,6 +424,7 @@ const Index = () => {
 
       if (data?.ok) {
         setCode("");
+        lastVerifiedCodeRef.current = "";
         setCodeAttempts(null);
         setDeliveryWarning(asDeliveryWarning(data.deliveryWarning));
         setDeliveryPollId((id) => id + 1);
@@ -388,6 +451,7 @@ const Index = () => {
       consumePendingRefUuid();
     }
     persistChatCompatCache({ email: normalizedEmail });
+    rememberLoginEmail(normalizedEmail);
     await refreshSession();
     navigate(hrefAfterLoginFromPendingSearch());
   };
@@ -415,7 +479,6 @@ const Index = () => {
       setLoading(false);
     }
 
-    setHasPassword(accountHasPassword);
     resetPasswordFields();
     if (accountHasPassword) {
       setLoginStep("password");
@@ -453,15 +516,8 @@ const Index = () => {
       toast({ title: "Ошибка", description: "Введите код подтверждения", variant: "destructive" });
       return;
     }
-    if (settingPassword && !isValidNewPassword(newPassword)) {
-      toast({ title: "Ошибка", description: PASSWORD_REQUIREMENTS, variant: "destructive" });
-      return;
-    }
-    if (settingPassword && newPassword !== repeatPassword) {
-      toast({ title: "Ошибка", description: "Пароли не совпадают", variant: "destructive" });
-      return;
-    }
 
+    lastVerifiedCodeRef.current = code;
     setLoading(true);
     try {
       const refUuid = peekPendingRefUuid();
@@ -470,14 +526,10 @@ const Index = () => {
         code: string;
         ref_uuid?: string;
         fingerprint?: string;
-        newPassword?: string;
       } = {
         email: normalizedEmail,
         code,
       };
-      if (settingPassword) {
-        verifyBody.newPassword = newPassword;
-      }
       if (refUuid) {
         verifyBody.ref_uuid = refUuid;
         const fingerprint = await getBrowserFingerprint();
@@ -507,6 +559,60 @@ const Index = () => {
       setLoading(false);
     }
   };
+
+  const handleLinkLogin = async () => {
+    if (!linkToken || loading) return;
+    setLoading(true);
+    try {
+      const refUuid = peekPendingRefUuid();
+      const body: { token: string; ref_uuid?: string; fingerprint?: string } = { token: linkToken };
+      if (refUuid) {
+        body.ref_uuid = refUuid;
+        const fingerprint = await getBrowserFingerprint();
+        if (fingerprint) body.fingerprint = fingerprint;
+      }
+      const result = await apiPost<{ user?: unknown; loginEmail?: unknown }>("/auth/verify-link", body);
+      clearLoginLinkToken();
+      if (result.error || !result.data?.user) {
+        setLinkConfirm(null);
+        toast({
+          title: "Ссылка не сработала",
+          description: authErrorMessage(result, "Ссылка устарела. Запросите новый код"),
+          variant: "destructive",
+        });
+        openLogin();
+        return;
+      }
+      if (refUuid) consumePendingRefUuid();
+      const linkEmail = typeof result.data.loginEmail === "string" ? result.data.loginEmail : "";
+      if (linkEmail) {
+        rememberLoginEmail(linkEmail);
+        persistChatCompatCache({ email: linkEmail });
+      }
+      await refreshSession();
+      navigate(hrefAfterLoginFromPendingSearch(), { replace: true });
+    } catch (err: unknown) {
+      toast({ title: "Ошибка", description: err instanceof Error ? err.message : "Ошибка входа", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelLinkLogin = () => {
+    if (loading) return;
+    clearLoginLinkToken();
+    setLinkConfirm(null);
+  };
+
+  // Пятая цифра — сразу проверяем код, без нажатия кнопки. Тот же код после ошибки
+  // повторно не отправляем: пользователь его исправит или нажмёт «Войти».
+  useEffect(() => {
+    if (loginStep !== "verify" || code.length < 5 || loading) return;
+    if (code === lastVerifiedCodeRef.current) return;
+    void handleVerify();
+    // handleVerify пересоздаётся на каждом рендере; реагируем только на ввод кода.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, loginStep]);
 
   if (!sessionReady) {
     return (
@@ -787,6 +893,34 @@ const Index = () => {
         <p>Работаем ежедневно: 05:00–01:00 МСК</p>
       </LandingModal>
 
+      {/* Confirm login by the emailed link */}
+      <LandingModal
+        open={Boolean(linkConfirm)}
+        onClose={cancelLinkLogin}
+        title="Вход в 220v"
+        subtitle={
+          <>
+            Войти в аккаунт <b className="login-sent-email">{linkConfirm?.maskedEmail}</b>?
+          </>
+        }
+      >
+        <div className="login-card" style={{ background: "transparent", border: 0, padding: 0, boxShadow: "none" }}>
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn btn--primary btn--wide"
+              onClick={() => void handleLinkLogin()}
+              disabled={loading}
+            >
+              {loading ? "Входим..." : "Войти"}
+            </button>
+            <button type="button" className="btn btn--ghost btn--wide" onClick={cancelLinkLogin} disabled={loading}>
+              Это не мой аккаунт
+            </button>
+          </div>
+        </div>
+      </LandingModal>
+
       {/* Login modal */}
       <LandingModal
         open={loginOpen}
@@ -794,12 +928,13 @@ const Index = () => {
         title={loginStep === "email" ? "Вход в 220v" : loginStep === "password" ? "Введите пароль" : "Введите код"}
         subtitle={
           loginStep === "email"
-            ? "Мы отправим код подтверждения на вашу почту"
+            ? "Пришлём на почту код и ссылку для входа"
             : loginStep === "password"
               ? `Пароль для ${normalizedEmail}`
               : (
                   <>
-                    Код уже летит на <b className="login-sent-email">{normalizedEmail}</b>
+                    Отправили на <b className="login-sent-email">{normalizedEmail}</b>. Введите код или нажмите
+                    «Войти» в письме
                   </>
                 )
         }
@@ -913,13 +1048,11 @@ const Index = () => {
                 ← Изменить email
               </button>
             </p>
-            <p className="login-support-hint">
-              Забыли пароль и нет доступа к почте? Если аккаунт уже есть, напишите в поддержку на{" "}
-              <a href={SUPPORT_MAILTO} className="modal__link">
-                {SUPPORT_EMAIL}
-              </a>{" "}
-              — после проверки вам установят пароль для входа.
-            </p>
+            <SupportHint
+              open={supportHintOpen}
+              onToggle={() => setSupportHintOpen((v) => !v)}
+              question="Забыли пароль и нет доступа к почте?"
+            />
           </form>
         ) : (
           <div className="login-card" style={{ background: "transparent", border: 0, padding: 0, boxShadow: "none" }}>
@@ -937,42 +1070,6 @@ const Index = () => {
               disabled={loading}
               className="login-typo-hint login-typo-hint--code"
             />
-            {settingPassword ? (
-              <div className="login-password-fields">
-                <div className="password-field">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    aria-label="Новый пароль"
-                    placeholder="6–128 символов, буквы и цифры"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    disabled={loading}
-                  />
-                  <PasswordVisibilityButton
-                    visible={showPassword}
-                    onClick={() => setShowPassword(!showPassword)}
-                    disabled={loading}
-                  />
-                </div>
-                <div className="password-field">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    aria-label="Повторите пароль"
-                    placeholder="Повторите пароль"
-                    value={repeatPassword}
-                    onChange={(e) => setRepeatPassword(e.target.value)}
-                    disabled={loading}
-                  />
-                  <PasswordVisibilityButton
-                    visible={showPassword}
-                    onClick={() => setShowPassword(!showPassword)}
-                    disabled={loading}
-                  />
-                </div>
-              </div>
-            ) : null}
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
               <InputOTP
                 maxLength={5}
@@ -981,6 +1078,9 @@ const Index = () => {
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 pattern="[0-9]*"
+                pushPasswordManagerStrategy="none"
+                autoFocus
+                disabled={loading}
               >
                 <InputOTPGroup className="login-otp-group gap-3">
                   {[0, 1, 2, 3, 4].map((index) => (
@@ -1001,27 +1101,10 @@ const Index = () => {
                 onClick={handleVerify}
                 disabled={loading || code.length < 5}
               >
-                {loading ? "Проверка..." : "Подтвердить"}
+                {loading ? "Проверка..." : "Войти"}
               </button>
             </div>
-            {!hasPassword ? (
-              <div className="login-password-optional">
-                <p>Пароль задавать необязательно — с ним можно входить без кода из письма</p>
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--wide"
-                  disabled={loading}
-                  onClick={() => {
-                    setSettingPassword(!settingPassword);
-                    setNewPassword("");
-                    setRepeatPassword("");
-                  }}
-                >
-                  {settingPassword ? "Продолжить без пароля" : "Задать пароль"}
-                </button>
-              </div>
-            ) : null}
-            <p className="form-link">
+            <p className="form-link login-code-links">
               <button
                 type="button"
                 onClick={() => {
@@ -1031,22 +1114,19 @@ const Index = () => {
               >
                 {resendCooldownSec > 0
                   ? formatResendCooldownButtonLabel(resendCooldownSec)
-                  : "Отправить код повторно"}
+                  : "Отправить ещё раз"}
               </button>
-            </p>
-            <p className="form-link">
-              Ошиблись почтой?{" "}
+              <span aria-hidden="true"> · </span>
               <button type="button" onClick={backToEmailStep} disabled={loading}>
-                Исправить
+                Изменить почту
               </button>
             </p>
-            <p className="login-support-hint">
-              Не приходит код или нет доступа к почте? Если аккаунт уже есть, напишите в поддержку на{" "}
-              <a href={SUPPORT_MAILTO} className="modal__link">
-                {SUPPORT_EMAIL}
-              </a>{" "}
-              — после проверки вам установят пароль для входа.
-            </p>
+            <SupportHint
+              open={supportHintOpen}
+              onToggle={() => setSupportHintOpen((v) => !v)}
+              question="Не приходит код?"
+              tip="Проверьте «Спам» и «Промоакции» — письмо иногда попадает туда."
+            />
           </div>
         )}
       </LandingModal>
