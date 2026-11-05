@@ -65,6 +65,9 @@ import atv2 from "@/assets/screenshots/atv2.webp";
 import tv1 from "@/assets/screenshots/tv1.png";
 import tv2 from "@/assets/screenshots/tv2.png";
 
+// Happ убрали из Google Play: для Android ведём на зеркало со всеми сборками.
+const HAPP_ANDROID_MIRROR_URL = "https://files-hub.com/?p=android";
+
 type Platform = InstructionsPlatform;
 
 type LayoutKind = "dropdown" | "grid";
@@ -373,8 +376,8 @@ const Instructions = () => {
     android: (
       <div className="flex flex-col gap-3">
         <Step n={1}>
-          Установи Happ из{" "}
-          <ExternalLink href="https://play.google.com/store/apps/details?id=com.happproxy">Google Play</ExternalLink>{" "}
+          Установи Happ со{" "}
+          <ExternalLink href={HAPP_ANDROID_MIRROR_URL}>страницы загрузки</ExternalLink>{" "}
           или{" "}
           <ExternalLink href={DOWNLOAD_LINKS.androidApk}>скачай APK</ExternalLink>.
         </Step>
@@ -470,8 +473,8 @@ const Instructions = () => {
     androidtv: (
       <div className="flex flex-col gap-3">
         <Step n={1}>
-          Установи Happ из{" "}
-          <ExternalLink href="https://play.google.com/store/apps/details?id=com.happproxy">Google Play</ExternalLink> или <ExternalLink href={DOWNLOAD_LINKS.androidApk}>скачай APK</ExternalLink>.
+          Установи Happ со{" "}
+          <ExternalLink href={HAPP_ANDROID_MIRROR_URL}>страницы загрузки</ExternalLink> или <ExternalLink href={DOWNLOAD_LINKS.androidApk}>скачай APK</ExternalLink>.
         </Step>
         <Step n={2}>
           Запусти приложение на ТВ — на экране появится QR-код.
@@ -492,8 +495,8 @@ const Instructions = () => {
   const mobileAndroidSimplified = (
     <div className="flex flex-col gap-3">
       <Step n={1}>
-        Установи Happ из{" "}
-        <ExternalLink href="https://play.google.com/store/apps/details?id=com.happproxy">Google Play</ExternalLink>{" "}
+        Установи Happ со{" "}
+        <ExternalLink href={HAPP_ANDROID_MIRROR_URL}>страницы загрузки</ExternalLink>{" "}
         или{" "}
         <ExternalLink href={DOWNLOAD_LINKS.androidApk}>скачай APK</ExternalLink>.
       </Step>
