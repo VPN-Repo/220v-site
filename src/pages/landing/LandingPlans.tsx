@@ -16,8 +16,10 @@ export const LandingPlans = ({ cards, onSelect, className }: LandingPlansProps) 
       const fullPrice = c.price + c.saving;
       return (
         <div key={c.months} className={`plan${c.featured ? " plan--featured" : ""}`} data-testid={`plan-${c.months}`}>
-          {c.discountPercent > 0 ? (
-            <span className={`plan__badge${c.featured ? "" : " plan__badge--alt"}`}>−{c.discountPercent}%</span>
+          {c.featured ? (
+            <span className="plan__badge">Выбор большинства</span>
+          ) : c.discountPercent > 0 ? (
+            <span className="plan__badge plan__badge--alt">−{c.discountPercent}%</span>
           ) : null}
           <div className="plan__head">
             <h3 className="plan__name">{c.label}</h3>

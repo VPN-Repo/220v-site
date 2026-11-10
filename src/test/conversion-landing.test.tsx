@@ -66,7 +66,7 @@ describe("selling landing", () => {
 
   it("first screen sells: the offer, the free test-drive button and the price from the API", async () => {
     renderLanding();
-    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Включите интернет на все 220");
+    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Включитесь на все 220");
     expect(screen.getAllByRole("button", { name: /Попробовать бесплатно/ }).length).toBeGreaterThan(0);
     expect(await screen.findByText("Тарифы — от 338 ₽ в месяц ↓")).toBeInTheDocument();
     expect(within(screen.getByTestId("plan-12")).getByText("4 060")).toBeInTheDocument();

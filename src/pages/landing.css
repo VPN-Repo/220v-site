@@ -5544,7 +5544,7 @@ body.landing-no-scroll { overflow: hidden; }
 }
 
 /* Hero v2: no hyphenation, a rating plate instead of a checklist, the mascot beside the headline on phones. */
-.landing-root .hero--offer .hero__title { hyphens: manual; }
+.landing-root .hero--offer .hero__title { hyphens: manual; word-break: normal; overflow-wrap: normal; }
 .landing-root .hero__nowrap { white-space: nowrap; }
 .landing-root .hero__plate {
   display: grid;
@@ -5604,7 +5604,7 @@ body.landing-no-scroll { overflow: hidden; }
   /* Phones: headline and mascot share the first row, everything else runs full width below. */
   .landing-root .hero--offer .hero__grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 0.72fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.62fr);
     grid-template-areas:
       "title mascot"
       "desc desc"
@@ -5644,7 +5644,7 @@ body.landing-no-scroll { overflow: hidden; }
   .landing-root .step__num { grid-row: span 2; font-size: 44px; margin: 0; }
 }
 @media (max-width: 520px) {
-  .landing-root .hero--offer .hero__title { font-size: clamp(30px, 9.4vw, 38px); }
+  .landing-root .hero--offer .hero__title { font-size: clamp(27px, 8.6vw, 34px); }
   .landing-root .hero--offer .hero__mascot { max-height: 196px; }
   .landing-root .hero__plate-cell { padding: 9px 10px 10px; }
   .landing-root .hero__plate dd { font-size: 15px; }
