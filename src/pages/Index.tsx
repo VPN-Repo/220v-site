@@ -34,6 +34,7 @@ import LandingHeader from "@/pages/landing/LandingHeader";
 import LandingFooter from "@/pages/landing/LandingFooter";
 import LandingModal from "@/pages/landing/LandingModal";
 import mascot220v from "@/assets/mascot-220v.png";
+import { track } from "@/lib/funnel";
 
 /** Совпадает с ключом в Dashboard: отложенный query после входа с deep link */
 const DASHBOARD_PENDING_SEARCH_KEY = "vpn_dashboard_pending_search";
@@ -126,6 +127,9 @@ function asDeliveryWarning(value: unknown): DeliveryWarning | null {
 const EMAIL_HINT_DELAY_MS = 800;
 
 const Index = () => {
+  useEffect(() => {
+    track("landing_view", { once: true });
+  }, []);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
@@ -293,6 +297,7 @@ const Index = () => {
   };
 
   const openLogin = () => {
+    track("login_open");
     setLoginStep("email");
     setCode("");
     resetPasswordFields();
@@ -561,7 +566,14 @@ const Index = () => {
                 <br />
                 всех ваших гаджетов.
               </p>
-              <button type="button" className="btn btn--primary btn--lg" onClick={openLogin}>
+              <button
+                type="button"
+                className="btn btn--primary btn--lg"
+                onClick={() => {
+                  track("landing_cta");
+                  openLogin();
+                }}
+              >
                 <svg viewBox="0 0 24 24" className="btn__icon" aria-hidden="true">
                   <path d="M13 2 L4 14 h7 l-2 8 l9-12 h-7 l2-8 Z" fill="currentColor" />
                 </svg>

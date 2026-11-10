@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { RotateCcw, XCircle } from "lucide-react";
 
@@ -5,8 +6,12 @@ import failMascot from "@/assets/pay-fail-mascot.png";
 import LandingFooter from "@/pages/landing/LandingFooter";
 import LandingHeader from "@/pages/landing/LandingHeader";
 import LandingShell from "@/pages/landing/LandingShell";
+import { track } from "@/lib/funnel";
 
 const PayFail = () => {
+  useEffect(() => {
+    track("pay_fail_view", { once: true });
+  }, []);
   const navigate = useNavigate();
 
   return (

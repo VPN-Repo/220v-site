@@ -64,6 +64,7 @@ import atv1 from "@/assets/screenshots/atv1.webp";
 import atv2 from "@/assets/screenshots/atv2.webp";
 import tv1 from "@/assets/screenshots/tv1.png";
 import tv2 from "@/assets/screenshots/tv2.png";
+import { track } from "@/lib/funnel";
 
 type Platform = InstructionsPlatform;
 
@@ -135,6 +136,7 @@ const CopySubscriptionLink = ({ subscriptionUrl }: { subscriptionUrl?: string })
   const btnRef = useRef<HTMLButtonElement>(null);
 
   const handleCopy = () => {
+    track("copy_link");
     if (!subscriptionUrl) {
       toast.error("Ссылка подписки недоступна");
       return;
@@ -176,6 +178,7 @@ const QrCodeLink = ({
   onOpenQr: () => void;
 }) => {
   const handleOpen = () => {
+    track("qr_open");
     if (!subscriptionUrl) {
       toast.error("Ссылка подписки недоступна");
       return;
@@ -198,6 +201,7 @@ const QrCodeLink = ({
 const ExternalLink = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <a
     href={href}
+    onClick={() => track("install_click")}
     target="_blank"
     rel="noopener noreferrer"
     className="instructions-inline-link"
@@ -247,6 +251,7 @@ const OneClickAddButton = ({ subscriptionUrl }: { subscriptionUrl?: string }) =>
         toast.error("Ссылка подписки недоступна");
         return;
       }
+      track("add_click");
       window.location.href = oneClickHappSubscriptionUrl(subscriptionUrl);
     }}
   >
@@ -301,6 +306,9 @@ const ScreenshotGallery = ({
 };
 
 const Instructions = () => {
+  useEffect(() => {
+    track("instructions_open", { once: true });
+  }, []);
   const { email, items, handleLogout } = useDashboardSidebarItems();
   const [searchParams, setSearchParams] = useSearchParams();
 

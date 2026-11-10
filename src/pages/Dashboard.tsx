@@ -59,6 +59,7 @@ import DashboardSidebar, { type DashboardSidebarItem } from "@/components/Dashbo
 import PasswordDialog from "@/components/PasswordDialog";
 import RevokeSubscriptionDialog, { REVOKE_ACTION_LABEL } from "@/components/RevokeSubscriptionDialog";
 import { SIDEBAR_SHOW_OTHER, SIDEBAR_SHOW_REFERRALS } from "@/hooks/useDashboardSidebarItems";
+import { track } from "@/lib/funnel";
 
 interface UserData {
   plan: string;
@@ -212,6 +213,13 @@ const DASHBOARD_PENDING_SEARCH_KEY = "vpn_dashboard_pending_search";
 
 const Dashboard = () => {
   const [userData, setUserData] = useState<UserData | null>(null);
+  // Funnel: one view per page load; «with a device» once the profile shows one.
+  const funnelHasDevice = (userData?.currentDevices ?? 0) > 0;
+  useEffect(() => {
+    if (!userData) return;
+    track("dashboard_view", { once: true });
+    if (funnelHasDevice) track("device_connected", { once: true });
+  }, [userData, funnelHasDevice]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [billingMeta, setBillingMeta] = useState<BillingMeta | null>(null);
@@ -632,6 +640,7 @@ const Dashboard = () => {
     }
     setPaymentLoading(paymentMethod);
     try {
+      track("checkout_click");
       const { data, error: fnError } = await apiPost<{ payment_url?: string }>("/checkout", {
         product_key,
         payment_method: paymentMethod,

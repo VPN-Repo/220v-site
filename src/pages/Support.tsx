@@ -4,8 +4,12 @@ import DashboardSidebar from "@/components/DashboardSidebar";
 import { useDashboardSidebarItems } from "@/hooks/useDashboardSidebarItems";
 import LandingShell from "@/pages/landing/LandingShell";
 import LandingFooter from "@/pages/landing/LandingFooter";
+import { track } from "@/lib/funnel";
 
 const Support = () => {
+  useEffect(() => {
+    track("support_open", { once: true });
+  }, []);
   const { email, items, handleLogout } = useDashboardSidebarItems();
   const [announcement, setAnnouncement] = useState<string | null>(null);
 
