@@ -292,7 +292,7 @@ const ConnectWizard = ({ subscriptionUrl, onConnected, onOtherDevice, onClose }:
 
   if (connected) {
     return (
-      <div className={`relative mb-6 w-full rounded-2xl ${BRAND.doneBoxClass} p-5 ring-2`} role="status">
+      <div className={`connect-card relative mb-6 w-full rounded-2xl ${BRAND.doneBoxClass} p-5 ring-2`} role="status">
         <button
           type="button"
           onClick={onClose}
@@ -321,7 +321,7 @@ const ConnectWizard = ({ subscriptionUrl, onConnected, onOtherDevice, onClose }:
           : C.titleFirst;
 
   return (
-    <section className="relative mb-6 w-full rounded-2xl bg-primary/10 p-4 ring-2 ring-primary/40 sm:p-5" aria-labelledby="connect-wizard-title">
+    <section className="connect-card relative mb-6 w-full rounded-2xl bg-primary/10 p-4 ring-2 ring-primary/40 sm:p-5" aria-labelledby="connect-wizard-title">
       <button
         type="button"
         onClick={onClose}

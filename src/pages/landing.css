@@ -5370,3 +5370,14 @@ body.landing-no-scroll { overflow: hidden; }
   border-color: rgba(198, 255, 61, 0.55);
   color: var(--dm-accent);
 }
+
+/* First-device card (components/ConnectWizard): the rules above for every link and button inside
+   .landing-root (colour: inherit, background: none, border: none) outrank its Tailwind classes, so
+   the few it uses are restated here with enough weight. */
+.landing-root .connect-card .text-primary { color: hsl(var(--primary)); }
+.landing-root .connect-card .text-primary-foreground { color: hsl(var(--primary-foreground)); }
+.landing-root .connect-card .text-foreground { color: hsl(var(--foreground)); }
+.landing-root .connect-card .text-muted-foreground { color: hsl(var(--muted-foreground)); }
+.landing-root .connect-card .bg-primary { background-color: hsl(var(--primary)); }
+.landing-root .connect-card .bg-card { background-color: hsl(var(--card)); }
+.landing-root .connect-card .border { border: 1px solid hsl(var(--input)); }

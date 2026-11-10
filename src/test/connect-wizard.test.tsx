@@ -104,13 +104,13 @@ describe("ConnectWizard", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("a computer asks: this computer or a phone; a phone gets the QR", () => {
+  it("a computer asks: this computer or a phone; a phone gets the QR", async () => {
     ua(WINDOWS);
     renderWizard();
     expect(screen.getByRole("heading", { name: C.titleFirst })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: C.phone }));
     expect(screen.getByRole("heading", { name: C.titlePhone })).toBeTruthy();
-    expect(screen.getByRole("img", { name: C.qrAlt })).toBeTruthy();
+    expect(await screen.findByRole("img", { name: C.qrAlt })).toBeTruthy();
     expect(screen.getByText(/files-hub\.com\/\?p=android/)).toBeTruthy();
     expect(screen.queryByRole("link", { name: /Android/ })).toBeNull();
     expect(screen.queryByRole("button", { name: C.addButton })).toBeNull();
