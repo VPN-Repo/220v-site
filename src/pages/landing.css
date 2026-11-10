@@ -5665,3 +5665,57 @@ body.landing-no-scroll { overflow: hidden; }
   color: var(--accent);
   margin: -8px 0 20px;
 }
+
+/* Hero checklist: lime check marks, left-aligned, two columns on wide screens. */
+.landing-root .hero__checks {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 10px 28px;
+  margin: 0 0 30px;
+  padding: 0;
+  list-style: none;
+}
+.landing-root .hero__checks li {
+  position: relative;
+  padding-left: 30px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+}
+.landing-root .hero__checks li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--accent);
+}
+.landing-root .hero__checks li::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  width: 8px;
+  height: 4px;
+  border-left: 2px solid #0a0a0a;
+  border-bottom: 2px solid #0a0a0a;
+  transform: rotate(-45deg);
+}
+@media (max-width: 960px) {
+  .landing-root .hero--offer .hero__grid {
+    grid-template-areas:
+      "title mascot"
+      "desc desc"
+      "checks checks"
+      "actions actions"
+      "note note";
+  }
+  .landing-root .hero--offer .hero__checks { grid-area: checks; margin-bottom: 22px; }
+}
+@media (max-width: 520px) {
+  .landing-root .hero__checks { grid-template-columns: 1fr; gap: 9px; }
+  .landing-root .hero__checks li { font-size: 15px; }
+}

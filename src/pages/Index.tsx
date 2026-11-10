@@ -759,23 +759,14 @@ const Index = () => {
                 <span className="accent hero__line">На все 220</span>
               </h1>
               <p className="hero__desc">
-                Быстрое защищённое соединение для телефона и компьютера. Все локации, безлимитный трафик*, подключение
-                через Happ за пару минут.
+                Быстрое защищённое соединение для телефона и компьютера. Подключение через Happ за пару минут.
               </p>
-              <dl className="hero__plate" aria-label="Коротко о сервисе">
-                <div className="hero__plate-cell">
-                  <dt>Тест-драйв</dt>
-                  <dd>6 ч бесплатно</dd>
-                </div>
-                <div className="hero__plate-cell">
-                  <dt>Устройств</dt>
-                  <dd>до 7</dd>
-                </div>
-                <div className="hero__plate-cell">
-                  <dt>Поддержка</dt>
-                  <dd>05:00–01:00</dd>
-                </div>
-              </dl>
+              <ul className="hero__checks" role="list">
+                <li>Безлимитный трафик*</li>
+                <li>16 стран</li>
+                <li>До 7 устройств</li>
+                <li>Тест-драйв 6 часов бесплатно</li>
+              </ul>
               <div className="hero__actions">
                 <button
                   type="button"
