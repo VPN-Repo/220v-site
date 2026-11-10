@@ -20,7 +20,7 @@ before(async () => {
 describe("OTP email content", () => {
   it("keeps the 220v sign-in email by default", () => {
     const message = buildOtpMessage("12345");
-    assert.equal(message.subject, "Ваш код для входа в 220v");
+    assert.equal(message.subject, "12345 — код для входа в 220v");
     assert.match(message.text, /Вы запросили вход в личный кабинет/);
     assert.match(message.text, /Ваш код подтверждения: 12345/);
     assert.match(message.html, /Подтверждение входа/);
@@ -40,7 +40,7 @@ describe("OTP email content", () => {
 
   it("explains password change without sign-in instructions", () => {
     const message = buildOtpMessage("54321", "password_change");
-    assert.equal(message.subject, "Код для смены пароля в 220v");
+    assert.equal(message.subject, "54321 — код для смены пароля в 220v");
     assert.match(message.text, /Ваш код подтверждения: 54321/);
     assert.match(message.text, /окне смены пароля/);
     assert.match(message.html, /Смена пароля/);

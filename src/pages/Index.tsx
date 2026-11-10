@@ -37,6 +37,9 @@ import LandingFooter from "@/pages/landing/LandingFooter";
 import LandingModal from "@/pages/landing/LandingModal";
 import mascot220v from "@/assets/mascot-220v.png";
 import { track } from "@/lib/funnel";
+import { clearPendingLogin, inboxUrlFor, readPendingLogin, savePendingLogin } from "@/lib/pendingLogin";
+import { cheapestPerMonth, formatRub, useTariffCards } from "@/lib/tariffPrices";
+import LandingPlans from "@/pages/landing/LandingPlans";
 
 /** Совпадает с ключом в Dashboard: отложенный query после входа с deep link */
 const DASHBOARD_PENDING_SEARCH_KEY = "vpn_dashboard_pending_search";
@@ -156,6 +159,34 @@ function SupportHint({
   );
 }
 
+// Answers to what people ask support most; facts come from the RMW tariffs and the site settings.
+const FAQ: { q: string; a: string }[] = [
+  {
+    q: "Сколько длится тест-драйв и что после него?",
+    a: "Тест-драйв бесплатный и длится 6 часов — хватит, чтобы проверить скорость на своём телефоне и операторе. Карту для него привязывать не нужно. Понравится — выберите тариф в кабинете, доступ продолжится на тех же устройствах.",
+  },
+  {
+    q: "Не приходит код на почту",
+    a: "Загляните в «Спам» и «Промоакции» — письмо иногда попадает туда. Код действует 10 минут, подходит код из последнего письма. Мы работаем с крупными почтовыми сервисами: Gmail, Mail.ru, Яндекс, Rambler, iCloud, Outlook и другими.",
+  },
+  {
+    q: "Какое приложение нужно?",
+    a: "Happ — для iPhone, Android, Windows и Mac. На iPhone его нет в российском App Store: в кабинете есть короткая инструкция, как сменить регион. Для Android даём установочный файл. Подписка добавляется в Happ одной кнопкой.",
+  },
+  {
+    q: "Сколько устройств можно подключить?",
+    a: "До 7 устройств на одном аккаунте: телефон, ноутбук, планшет, компьютер — в любом сочетании.",
+  },
+  {
+    q: "Что такое «Мобильная сеть» и её лимит?",
+    a: "Это серверы, которые работают при ограничениях мобильного интернета. На них действует лимит 35 ГБ в месяц, остальные локации — без ограничений по трафику. Если не хватит, в кабинете можно докупить +20 или +50 ГБ.",
+  },
+  {
+    q: "Что если перестанет работать?",
+    a: "Напишите в чат поддержки в кабинете — отвечаем ежедневно с 05:00 до 01:00 МСК и поможем подключиться. Условия возврата — в разделе «Условия использования».",
+  },
+];
+
 // Pause after the last keystroke before the email typo hint appears.
 const EMAIL_HINT_DELAY_MS = 800;
 
@@ -179,8 +210,6 @@ const Index = () => {
   // The typo hint shows once typing pauses or the field loses focus; it never blocks sending.
   const [emailSettled, setEmailSettled] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false);
-  const [pricingOpen, setPricingOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resendCooldownSec, setResendCooldownSec] = useState(0);
@@ -196,12 +225,19 @@ const Index = () => {
   // запрос успешно отправит письмо, второй упрётся в OTP-кулдаун (429) и
   // покажет пользователю «ошибку», хотя письмо уже пришло.
   const sendingRef = useRef(false);
+  // The code screen was reopened from a pending login: the pending-redirect effect must not reset it.
+  const restoredLoginRef = useRef(false);
+  // The pending-login check runs once per page, even if the session effect runs again.
+  const restoreCheckedRef = useRef(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const { refresh: refreshSession } = useSession();
+  const { cards } = useTariffCards();
+  const pricesRef = useRef<HTMLElement | null>(null);
 
   const normalizedEmail = email.trim().toLowerCase();
+  const mailInbox = inboxUrlFor(normalizedEmail);
 
   useEffect(() => {
     if (emailSettled) return;
@@ -276,6 +312,20 @@ const Index = () => {
         navigate(hrefAfterLoginFromPendingSearch(), { replace: true });
         return;
       }
+      track("landing_view_new", { once: true });
+      // A code was sent a few minutes ago and the page was reloaded (back from the mail app):
+      // open the code screen again instead of the landing.
+      const pending = restoreCheckedRef.current ? null : readPendingLogin();
+      restoreCheckedRef.current = true;
+      if (pending) {
+        restoredLoginRef.current = true;
+        setEmail(pending.email);
+        setEmailSettled(true);
+        setLoginStep("verify");
+        setResendCooldownSec(Math.max(0, 30 - Math.floor((Date.now() - pending.sentAt) / 1000)));
+        setLoginOpen(true);
+        track("code_screen_restored");
+      }
       setSessionReady(true);
     })();
     return () => {
@@ -286,7 +336,7 @@ const Index = () => {
   }, [navigate]);
 
   useEffect(() => {
-    if (!sessionReady) return;
+    if (!sessionReady || restoredLoginRef.current) return;
     if (peekVpnPendingRedirect()) {
       openLogin();
     }
@@ -334,6 +384,23 @@ const Index = () => {
     };
   }, [deliveryPollId, loginOpen, loginStep, normalizedEmail]);
 
+  // «Долистали до тарифов»: once, when the price section is half on screen.
+  useEffect(() => {
+    const node = pricesRef.current;
+    if (!sessionReady || !node || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          track("pricing_view", { once: true });
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.4 },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [sessionReady]);
+
   const backToEmailStep = () => {
     setCode("");
     resetPasswordFields();
@@ -370,14 +437,21 @@ const Index = () => {
     setLoginOpen(true);
   };
 
+  const openLoginFromHeader = () => {
+    track("header_login");
+    openLogin();
+  };
+
   const handleSelectTariff = (months: number) => {
+    track("plan_select");
     setVpnPendingRedirect(`/tariff/pay?months=${months}`);
-    setPricingOpen(false);
     openLogin();
   };
 
   const closeLogin = () => {
     if (loading) return;
+    clearPendingLogin();
+    restoredLoginRef.current = false;
     setCode("");
     resetPasswordFields();
     setResendCooldownSec(0);
@@ -423,6 +497,21 @@ const Index = () => {
         if (retryAfterSec) {
           setResendCooldownSec(retryAfterSec);
         }
+        // The cooldown means a code went to this address moments ago and still works:
+        // show the code screen instead of an error.
+        const errorCode = (data as { code?: unknown } | null | undefined)?.code;
+        if (result.status === 429 && errorCode === "otp_cooldown") {
+          setCode("");
+          lastVerifiedCodeRef.current = "";
+          setLoginStep("verify");
+          savePendingLogin(normalizedEmail);
+          toast({
+            title: "Код уже отправлен",
+            description: `Проверьте почту ${normalizedEmail} — подойдёт код из последнего письма`,
+            className: "bg-[#0a0a0a] text-white border-green-500 shadow-[inset_4px_0_0_0_#22c55e]",
+          });
+          return;
+        }
         toast({ title: "Ошибка", description: authErrorMessage(result, "Не удалось отправить код"), variant: "destructive" });
         return;
       }
@@ -434,6 +523,7 @@ const Index = () => {
         setDeliveryWarning(asDeliveryWarning(data.deliveryWarning));
         setDeliveryPollId((id) => id + 1);
         setLoginStep("verify");
+        savePendingLogin(normalizedEmail);
         setResendCooldownSec(retryAfterSec ?? data.retryAfterSec ?? 30);
         toast({
           title: "✅ Код отправлен!",
@@ -455,6 +545,7 @@ const Index = () => {
     if (refUuid) {
       consumePendingRefUuid();
     }
+    clearPendingLogin();
     persistChatCompatCache({ email: normalizedEmail });
     rememberLoginEmail(normalizedEmail);
     await refreshSession();
@@ -589,6 +680,7 @@ const Index = () => {
         return;
       }
       if (refUuid) consumePendingRefUuid();
+      clearPendingLogin();
       const linkEmail = typeof result.data.loginEmail === "string" ? result.data.loginEmail : "";
       if (linkEmail) {
         rememberLoginEmail(linkEmail);
@@ -632,59 +724,70 @@ const Index = () => {
       <LandingHeader
         nav={
           <>
-            <button type="button" className="nav__link" onClick={() => setAboutOpen(true)}>
-              О нас
-            </button>
-            <button type="button" className="nav__link" onClick={() => setPricingOpen(true)}>
+            <a href="#how" className="nav__link">
+              Как подключить
+            </a>
+            <a href="#prices" className="nav__link">
               Цены
-            </button>
+            </a>
+            <a href="#faq" className="nav__link">
+              Вопросы
+            </a>
             <button type="button" className="nav__link" onClick={() => setSupportOpen(true)}>
               Поддержка
             </button>
           </>
         }
         cta={
-          <button type="button" className="btn btn--ghost" onClick={openLogin}>
+          <button type="button" className="btn btn--ghost" onClick={openLoginFromHeader}>
+            Войти
+          </button>
+        }
+        mobileCta={
+          <button type="button" className="btn btn--ghost header__mobile-login" aria-label="Войти в аккаунт" onClick={openLoginFromHeader}>
             Войти
           </button>
         }
       />
 
       <main>
-        <section className="hero">
+        <section className="hero hero--offer">
           <div className="container hero__grid">
             <div className="hero__content">
+              <p className="hero__eyebrow">
+                <span className="hero__eyebrow-dot" aria-hidden="true" /> Тест-драйв бесплатно · нужен только email
+              </p>
               <h1 className="hero__title">
-                Оставайтесь{" "}
-                <br />
-                <span className="accent">невидимыми</span>{" "}
-                <br />
-                для посторонних{" "}
-                <br />
-                с <span className="accent">220v</span>
+                Включите интернет <span className="accent">на все 220</span>
               </h1>
               <p className="hero__desc">
-                Мы надёжно скрываем ваши данные{" "}
-                <br />
-                и шифруем каждое действие в сети.{" "}
-                <br />
-                Один сервис для безопасности{" "}
-                <br />
-                всех ваших гаджетов.
+                Быстрое и защищённое соединение для телефона и компьютера. Подключение за пару минут через приложение
+                Happ — без настроек.
               </p>
-              <button
-                type="button"
-                className="btn btn--primary btn--lg"
-                onClick={() => {
-                  track("landing_cta");
-                  openLogin();
-                }}
-              >
-                <svg viewBox="0 0 24 24" className="btn__icon" aria-hidden="true">
-                  <path d="M13 2 L4 14 h7 l-2 8 l9-12 h-7 l2-8 Z" fill="currentColor" />
-                </svg>
-                Регистрация в 220v
-              </button>
+              <ul className="hero__points" role="list">
+                <li>Все локации и безлимитный трафик*</li>
+                <li>До 7 устройств на одном аккаунте</li>
+                <li>Живая поддержка ежедневно 05:00–01:00 МСК</li>
+              </ul>
+              <div className="hero__actions">
+                <button
+                  type="button"
+                  className="btn btn--primary btn--lg hero__cta"
+                  onClick={() => {
+                    track("landing_cta");
+                    openLogin();
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" className="btn__icon" aria-hidden="true">
+                    <path d="M13 2 L4 14 h7 l-2 8 l9-12 h-7 l2-8 Z" fill="currentColor" />
+                  </svg>
+                  Попробовать бесплатно
+                </button>
+                <a href="#prices" className="hero__price-link">
+                  Тарифы — от {formatRub(cheapestPerMonth(cards))} ₽ в месяц ↓
+                </a>
+              </div>
+              <p className="hero__note">Код для входа придёт на почту. Карта не нужна.</p>
             </div>
 
             <div className="hero__visual">
@@ -700,198 +803,99 @@ const Index = () => {
               />
             </div>
           </div>
+        </section>
 
+        <section className="landing-section" id="how" aria-labelledby="how-title">
           <div className="container">
-            <ul className="features" role="list">
-              <li className="feature">
-                <span className="feature__icon" aria-hidden="true">
-                  <svg viewBox="0 0 32 32" fill="none">
-                    <path
-                      d="M16 3 4 7v9c0 7 5 12 12 13 7-1 12-6 12-13V7l-12-4Z"
-                      stroke="#C6FF3D"
-                      strokeWidth="2"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="m11 16 4 4 7-8"
-                      stroke="#C6FF3D"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-                <h3 className="feature__title">Безопасно</h3>
-                <p className="feature__desc">
-                  Ваши данные{" "}
-                  <br />
-                  под защитой
-                </p>
+            <h2 className="landing-section__title" id="how-title">
+              Подключение в три шага
+            </h2>
+            <ol className="steps" role="list">
+              <li className="step">
+                <span className="step__num">1</span>
+                <h3 className="step__title">Введите email</h3>
+                <p className="step__desc">Пришлём код для входа. Аккаунт и тест-драйв появятся сразу.</p>
               </li>
-              <li className="feature">
-                <span className="feature__icon" aria-hidden="true">
-                  <svg viewBox="0 0 32 32" fill="none">
-                    <path d="M18 3 6 18h7l-3 11 12-15h-7l3-11Z" stroke="#C6FF3D" strokeWidth="2" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <h3 className="feature__title">Быстро</h3>
-                <p className="feature__desc">
-                  Высокая скорость{" "}
-                  <br />
-                  без ограничений
-                </p>
+              <li className="step">
+                <span className="step__num">2</span>
+                <h3 className="step__title">Установите Happ</h3>
+                <p className="step__desc">Кабинет даст ссылку для вашего телефона или компьютера.</p>
               </li>
-              <li className="feature">
-                <span className="feature__icon" aria-hidden="true">
-                  <svg viewBox="0 0 32 32" fill="none">
-                    <circle cx="16" cy="16" r="13" stroke="#C6FF3D" strokeWidth="2" />
-                    <path
-                      d="M3 16h26M16 3c3.5 4 5.5 8 5.5 13s-2 9-5.5 13c-3.5-4-5.5-8-5.5-13S12.5 7 16 3Z"
-                      stroke="#C6FF3D"
-                      strokeWidth="2"
-                    />
-                  </svg>
-                </span>
-                <h3 className="feature__title">Свободно</h3>
-                <p className="feature__desc">
-                  Доступ к любому{" "}
-                  <br />
-                  контенту
-                </p>
+              <li className="step">
+                <span className="step__num">3</span>
+                <h3 className="step__title">Нажмите «Добавить»</h3>
+                <p className="step__desc">Подписка сама появится в Happ — включайте и пользуйтесь.</p>
               </li>
-              <li className="feature">
-                <span className="feature__icon" aria-hidden="true">
-                  <svg viewBox="0 0 32 32" fill="none">
-                    <path
-                      d="M12 3v7M20 3v7M8 10h16v6a8 8 0 0 1-8 8 8 8 0 0 1-8-8v-6ZM16 24v5"
-                      stroke="#C6FF3D"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-                <h3 className="feature__title">Всегда на связи</h3>
-                <p className="feature__desc">
-                  220v — энергия{" "}
-                  <br />
-                  свободы в интернете
-                </p>
-              </li>
-            </ul>
+            </ol>
+            <div className="landing-section__cta">
+              <button
+                type="button"
+                className="btn btn--primary btn--lg"
+                onClick={() => {
+                  track("landing_cta");
+                  openLogin();
+                }}
+              >
+                Начать тест-драйв
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="landing-section" id="prices" ref={pricesRef} aria-labelledby="prices-title">
+          <div className="container">
+            <h2 className="landing-section__title" id="prices-title">
+              Тарифы
+            </h2>
+            <p className="landing-section__subtitle">Чем дольше срок, тем дешевле месяц. Сначала можно бесплатно попробовать.</p>
+            <LandingPlans cards={cards} onSelect={handleSelectTariff} />
+            <p className="price-page__note">
+              * Безлимит на всех локациях, кроме серверов «Мобильная сеть» — там 35 ГБ в месяц. Подробнее — в{" "}
+              <a href="/terms" className="modal__link">
+                условиях использования
+              </a>
+              .
+            </p>
+          </div>
+        </section>
+
+        <section className="landing-section" id="faq" aria-labelledby="faq-title">
+          <div className="container container--narrow">
+            <h2 className="landing-section__title" id="faq-title">
+              Частые вопросы
+            </h2>
+            <div className="faq">
+              {FAQ.map((item) => (
+                <details
+                  key={item.q}
+                  className="faq__item"
+                  onToggle={(e) => {
+                    if ((e.currentTarget as HTMLDetailsElement).open) track("faq_open");
+                  }}
+                >
+                  <summary className="faq__q">{item.q}</summary>
+                  <div className="faq__a">{item.a}</div>
+                </details>
+              ))}
+            </div>
+            <div className="landing-section__cta">
+              <button
+                type="button"
+                className="btn btn--primary btn--lg"
+                onClick={() => {
+                  track("landing_cta");
+                  openLogin();
+                }}
+              >
+                Попробовать бесплатно
+              </button>
+              <p className="hero__note">Остались вопросы — напишите в чат поддержки после входа.</p>
+            </div>
           </div>
         </section>
       </main>
 
       <LandingFooter />
-
-      {/* About modal */}
-      <LandingModal open={aboutOpen} onClose={() => setAboutOpen(false)} title="О нас">
-        <p>
-          Опираясь на многолетний опыт управления серверами, наша команда разработала сервис для создания защищённых
-          интернет-туннелей.
-        </p>
-        <p>
-          Мы понимаем все тонкости маршрутизации и выстраивания анонимных соединений. Наш приоритет — чтобы трафик
-          клиентов всегда шёл к нужным ресурсам по оптимальным и безопасным путям.
-        </p>
-        <p>
-          Мы лично пользуемся своей разработкой каждый день, на 100% уверены в её качестве и с гордостью предлагаем её
-          вам!
-        </p>
-      </LandingModal>
-
-      {/* Pricing modal */}
-      <LandingModal
-        open={pricingOpen}
-        onClose={() => setPricingOpen(false)}
-        title="Тарифы"
-        subtitle="Выберите срок — чем дольше, тем выгоднее"
-        wide
-      >
-        <div className="plans">
-          <div className="plan">
-            <div className="plan__head">
-              <h3 className="plan__name">1 месяц</h3>
-            </div>
-            <div className="plan__price">
-              <span className="plan__amount">450</span>
-              <span className="plan__currency">₽</span>
-            </div>
-            <p className="plan__period">за 1 месяц</p>
-            <ul className="plan__features" role="list">
-              <li>Все локации</li>
-              <li>Безлимитный трафик*</li>
-              <li>Работаем ежедневно: 05:00–01:00 МСК</li>
-            </ul>
-            <button
-              type="button"
-              className="btn btn--ghost btn--wide plan__btn"
-              onClick={() => handleSelectTariff(1)}
-            >
-              Выбрать
-            </button>
-          </div>
-
-          <div className="plan plan--featured">
-            <span className="plan__badge">-15%</span>
-            <div className="plan__head">
-              <h3 className="plan__name">6 месяцев</h3>
-            </div>
-            <div className="plan__price">
-              <span className="plan__amount">2 295</span>
-              <span className="plan__currency">₽</span>
-            </div>
-            <p className="plan__period">≈ 382 ₽ / месяц</p>
-            <ul className="plan__features" role="list">
-              <li>Все локации</li>
-              <li>Безлимитный трафик*</li>
-              <li>Работаем ежедневно: 05:00–01:00 МСК</li>
-              <li>Экономия 15%</li>
-            </ul>
-            <button
-              type="button"
-              className="btn btn--primary btn--wide plan__btn"
-              onClick={() => handleSelectTariff(6)}
-            >
-              Выбрать
-            </button>
-          </div>
-
-          <div className="plan">
-            <span className="plan__badge plan__badge--alt">-30%</span>
-            <div className="plan__head">
-              <h3 className="plan__name">1 год</h3>
-            </div>
-            <div className="plan__price">
-              <span className="plan__amount">3 780</span>
-              <span className="plan__currency">₽</span>
-            </div>
-            <p className="plan__period">≈ 315 ₽ / месяц</p>
-            <ul className="plan__features" role="list">
-              <li>Все локации</li>
-              <li>Безлимитный трафик*</li>
-              <li>Приоритетная поддержка</li>
-              <li>Максимальная выгода — 30%</li>
-            </ul>
-            <button
-              type="button"
-              className="btn btn--ghost btn--wide plan__btn"
-              onClick={() => handleSelectTariff(12)}
-            >
-              Выбрать
-            </button>
-          </div>
-        </div>
-
-        <p className="modal__note">
-          * На серверах категории «Мобильная сеть» действует лимит 10 ГБ в месяц. Подробнее — в{" "}
-          <a href="/terms" className="modal__link">
-            условиях использования
-          </a>
-          .
-        </p>
-      </LandingModal>
 
       {/* Support modal */}
       <LandingModal open={supportOpen} onClose={() => setSupportOpen(false)} title="Поддержка">
@@ -1135,11 +1139,26 @@ const Index = () => {
                 Изменить почту
               </button>
             </p>
+            <div className="login-mail-hint" data-testid="login-mail-hint">
+              <p>
+                Нет письма? Загляните в «Спам» и «Промоакции». Код действует 10 минут — подходит из последнего письма.
+              </p>
+              {mailInbox ? (
+                <a
+                  className="btn btn--ghost btn--wide login-mail-hint__open"
+                  href={mailInbox.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => track("mail_open_click")}
+                >
+                  Открыть {mailInbox.name}
+                </a>
+              ) : null}
+            </div>
             <SupportHint
               open={supportHintOpen}
               onToggle={() => setSupportHintOpen((v) => !v)}
-              question="Не приходит код?"
-              tip="Проверьте «Спам» и «Промоакции» — письмо иногда попадает туда."
+              question="Письмо так и не пришло?"
             />
           </div>
         )}

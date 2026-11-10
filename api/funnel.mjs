@@ -17,6 +17,13 @@ export const FUNNEL_EVENTS = [
   "landing_view",
   "landing_cta",
   "login_open",
+  "landing_view_new",
+  "header_login",
+  "pricing_view",
+  "plan_select",
+  "faq_open",
+  "code_screen_restored",
+  "mail_open_click",
   // Login (server side)
   "code_sent",
   "login_ok",
@@ -28,6 +35,8 @@ export const FUNNEL_EVENTS = [
   "copy_link",
   "qr_open",
   "device_connected",
+  "trial_offer_view",
+  "trial_offer_click",
   // Payment
   "buy_open",
   "checkout_click",

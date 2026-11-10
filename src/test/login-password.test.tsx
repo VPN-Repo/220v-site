@@ -52,9 +52,10 @@ describe("login by password", () => {
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith("/auth/send-code", { email: "user@gmail.com" }));
     expect(apiPost).toHaveBeenCalledWith("/auth/method", { email: "user@gmail.com" });
     expect(await screen.findByRole("heading", { name: "Введите код" })).toBeInTheDocument();
-    // Подсказка про поддержку свёрнута, раскрывается по «Не приходит код?».
+    // Про «Спам» сказано сразу; контакт поддержки раскрывается по «Письмо так и не пришло?».
+    expect(screen.getByTestId("login-mail-hint")).toHaveTextContent("Загляните в «Спам»");
     expect(screen.queryByRole("link", { name: "support@220v.shop" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Не приходит код?" }));
+    fireEvent.click(screen.getByRole("button", { name: "Письмо так и не пришло?" }));
     expect(screen.getByRole("link", { name: "support@220v.shop" })).toHaveAttribute("href", "mailto:support@220v.shop");
     expect(screen.getByText(/доступа к почте нет/)).toBeInTheDocument();
   });

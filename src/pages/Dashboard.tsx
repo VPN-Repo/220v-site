@@ -59,6 +59,7 @@ import LandingShell from "@/pages/landing/LandingShell";
 import LandingFooter from "@/pages/landing/LandingFooter";
 import ReferralPromoStrip from "@/components/ReferralPromoStrip";
 import PasswordNudge from "@/components/PasswordNudge";
+import TrialOffer from "@/components/TrialOffer";
 import ConnectWizard from "@/components/ConnectWizard";
 import { isPasswordNudgeDismissed } from "@/lib/passwordNudge";
 import DashboardSidebar, { type DashboardSidebarItem } from "@/components/DashboardSidebar";
@@ -761,6 +762,8 @@ const Dashboard = () => {
   const planLc = (userData?.plan ?? "").toLowerCase();
   const isPremiumPlan = isPaidTariff(tariffLc, planLc);
   const isExpired = (userData?.status ?? "").toUpperCase() === "EXPIRED";
+  // Test-drive account (RMW tariff "trial", or the API's "Test" label for a short unpaid period).
+  const isTrial = !isPremiumPlan && (tariffLc === "trial" || planLc === "test");
   const isTrafficExhausted = hasTrafficLimit && usedTrafficBytes >= trafficLimitBytes;
   const subscriptionMsLeftNow = subscriptionMsLeft(userData);
   const subscriptionEnd = subscriptionEndLabel(userData);
@@ -845,6 +848,8 @@ const Dashboard = () => {
 
   const showConnectWizard =
     !wizardHidden && !isExpired && Boolean(resolveSubscriptionUrl()) && ((userData?.currentDevices ?? 0) === 0 || wizardDone);
+  // The offer waits until the first device works (or the test is over): selling before it works does not.
+  const showTrialOffer = isTrial && (isExpired || (!showConnectWizard && (userData?.currentDevices ?? 0) > 0) || wizardDone);
   const hideConnectWizard = () => {
     setWizardHidden(true);
     try {
@@ -948,7 +953,7 @@ const Dashboard = () => {
               <span
                 className={`dash-badge ${isExpired ? "dash-badge--danger" : "dash-badge--ok"}`}
               >
-                {isExpired ? "Подписка истекла" : "Подписка активна"}
+                {isTrial ? (isExpired ? "Тест-драйв закончился" : "Тест-драйв") : isExpired ? "Подписка истекла" : "Подписка активна"}
               </span>
             </header>
 
@@ -963,7 +968,7 @@ const Dashboard = () => {
                 onOtherDevice={() => navigate("/instructions")}
                 onClose={hideConnectWizard}
               />
-            ) : passwordKnown && !hasPassword && !passwordNudgeHidden ? (
+            ) : showTrialOffer ? null : passwordKnown && !hasPassword && !passwordNudgeHidden ? (
               <PasswordNudge
                 onSetPassword={() => setPasswordDialogOpen(true)}
                 onDismiss={() => setPasswordNudgeHidden(true)}
@@ -971,6 +976,15 @@ const Dashboard = () => {
             ) : (
               <ReferralPromoStrip />
             )}
+
+            {showTrialOffer ? (
+              <TrialOffer
+                msLeft={subscriptionMsLeftNow}
+                expired={isExpired}
+                onChoose={(months) => navigate(`/tariff/pay?months=${months}`)}
+                onAllPlans={() => navigate("/tariff")}
+              />
+            ) : null}
 
             <section className={`dash-hero ${isExpired ? "dash-hero--danger" : ""}`}>
               <div className="dash-hero__info">
@@ -1000,7 +1014,7 @@ const Dashboard = () => {
                   onClick={() => navigate("/tariff")}
                 >
                   <ShoppingCart className="h-5 w-5" aria-hidden="true" />
-                  Продлить подписку
+                  {isTrial ? "Выбрать тариф" : "Продлить подписку"}
                 </button>
                 <span className="dash-hero__hint">
                   {isExpired
@@ -1617,7 +1631,7 @@ const Dashboard = () => {
               <p className="dash-modal__section-title">📋 Условия и возможности</p>
               <ul className="dash-modal__list">
                 <li>
-                  <strong>Трафик:</strong> 100 ГБ на серверах для мобильного интернета и полный безлимит на всех
+                  <strong>Трафик:</strong> 35 ГБ в месяц на серверах для мобильного интернета и полный безлимит на всех
                   остальных локациях.
                 </li>
                 <li>

@@ -236,7 +236,8 @@ export function buildOtpMessage(code, purpose = "login", loginUrl = null) {
   const safeCode = escapeHtml(code);
   const safeLoginUrl = loginUrl && purpose !== "password_change" ? escapeHtml(loginUrl) : "";
   const changingPassword = purpose === "password_change";
-  const subject = changingPassword ? "Код для смены пароля в 220v" : `Ваш код для входа в 220v`;
+  // The code goes first in the subject, so it is readable right in the notification.
+  const subject = changingPassword ? `${code} — код для смены пароля в 220v` : `${code} — код для входа в 220v`;
   const copy = changingPassword
     ? {
         requested: "Вы запросили установку или смену пароля в личном кабинете.",

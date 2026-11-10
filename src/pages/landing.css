@@ -5381,3 +5381,242 @@ body.landing-no-scroll { overflow: hidden; }
 .landing-root .connect-card .bg-primary { background-color: hsl(var(--primary)); }
 .landing-root .connect-card .bg-card { background-color: hsl(var(--card)); }
 .landing-root .connect-card .border { border: 1px solid hsl(var(--input)); }
+
+/* ---------- Conversion landing (offer hero, steps, prices, FAQ) ---------- */
+.landing-root .header__mobile-cta { display: none; }
+.landing-root .hero--offer .hero__title { margin-bottom: 18px; }
+.landing-root .hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(198, 255, 61, 0.35);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(198, 255, 61, 0.06);
+}
+.landing-root .hero__eyebrow-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+.landing-root .hero--offer .hero__desc { margin-bottom: 18px; max-width: 480px; }
+.landing-root .hero__points {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 28px;
+}
+.landing-root .hero__points li {
+  position: relative;
+  padding-left: 26px;
+  font-size: 15px;
+  color: var(--muted-2);
+  text-align: left;
+}
+.landing-root .hero__points li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 6px;
+  width: 12px;
+  height: 7px;
+  border-left: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  transform: rotate(-45deg);
+}
+.landing-root .hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 22px;
+}
+.landing-root .hero__price-link {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: rgba(198, 255, 61, 0.6);
+  text-underline-offset: 4px;
+}
+.landing-root .hero__note {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.landing-root .landing-section { padding: 56px 0; border-top: 1px solid var(--border); scroll-margin-top: 80px; }
+.landing-root .landing-section__title {
+  font-size: clamp(26px, 3.6vw, 40px);
+  font-weight: 800;
+  letter-spacing: -0.8px;
+  line-height: 1.1;
+  margin-bottom: 10px;
+  text-align: center;
+}
+.landing-root .landing-section__subtitle {
+  text-align: center;
+  color: var(--muted-2);
+  font-size: 16px;
+  margin-bottom: 28px;
+}
+.landing-root .landing-section__cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 28px;
+  text-align: center;
+}
+.landing-root .container--narrow { max-width: 760px; }
+
+.landing-root .steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-top: 24px;
+  list-style: none;
+  padding: 0;
+}
+.landing-root .step {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 22px;
+}
+.landing-root .step__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #0a0a0a;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+.landing-root .step__title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+.landing-root .step__desc { font-size: 14px; color: var(--muted); line-height: 1.5; }
+
+.landing-root .plan__old {
+  margin-left: 6px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.landing-root .faq { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+.landing-root .faq__item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+}
+.landing-root .faq__item[open] { border-color: rgba(198, 255, 61, 0.35); }
+.landing-root .faq__q {
+  cursor: pointer;
+  list-style: none;
+  padding: 16px 44px 16px 18px;
+  font-weight: 600;
+  font-size: 16px;
+  position: relative;
+}
+.landing-root .faq__q::-webkit-details-marker { display: none; }
+.landing-root .faq__q::after {
+  content: "+";
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--accent);
+  font-size: 22px;
+  font-weight: 400;
+}
+.landing-root .faq__item[open] .faq__q::after { content: "−"; }
+.landing-root .faq__a { padding: 0 18px 16px; color: var(--muted-2); font-size: 15px; line-height: 1.6; }
+
+.landing-root .login-mail-hint {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--muted-2);
+  text-align: left;
+}
+.landing-root .login-mail-hint__open { margin-top: 10px; }
+
+/* Test-drive offer in the cabinet */
+.landing-root .trial-offer {
+  display: flex;
+  gap: 14px;
+  padding: 18px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(198, 255, 61, 0.55);
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(420px 160px at 0% 0%, rgba(198, 255, 61, 0.12), transparent 70%),
+    rgba(255, 255, 255, 0.02);
+}
+.landing-root .trial-offer--expired { border-color: rgba(255, 107, 107, 0.6); }
+.landing-root .trial-offer__icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #0a0a0a;
+}
+.landing-root .trial-offer__title { font-size: 18px; font-weight: 800; margin-bottom: 4px; color: var(--text); }
+.landing-root .trial-offer__text { font-size: 14px; color: var(--muted-2); line-height: 1.5; }
+.landing-root .trial-offer__price { margin-top: 8px; font-size: 14px; font-weight: 600; color: var(--accent); }
+.landing-root .trial-offer__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-top: 14px; }
+.landing-root .trial-offer__cta {
+  padding: 11px 20px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #0a0a0a;
+  font-weight: 700;
+  font-size: 15px;
+  border: 0;
+}
+.landing-root .trial-offer__link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--muted-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-size: 14px;
+}
+@media (hover: hover) {
+  .landing-root .trial-offer__cta:hover { background: var(--accent-2); }
+}
+
+@media (max-width: 960px) {
+  .landing-root .header__mobile-cta { display: block; margin-left: auto; }
+  .landing-root .header__mobile-cta + .burger { margin-left: 0; }
+  .landing-root .header__mobile-login { padding: 8px 16px; }
+  /* Offer first on phones: text and button above the mascot. */
+  .landing-root .hero--offer .hero__content { order: 1; }
+  .landing-root .hero--offer .hero__visual { order: 2; min-height: 0; }
+  .landing-root .hero--offer .hero__mascot { max-height: 220px; }
+  .landing-root .hero--offer .hero__points { align-items: center; }
+  .landing-root .hero--offer .hero__actions { justify-content: center; }
+  .landing-root .steps { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .landing-root .hero--offer { padding-top: 20px; }
+  .landing-root .hero--offer .hero__mascot { max-height: 160px; }
+  .landing-root .hero__eyebrow { font-size: 12px; margin-bottom: 14px; }
+  .landing-root .hero__points li { font-size: 14px; }
+  .landing-root .hero__actions { flex-direction: column; gap: 12px; }
+  .landing-root .hero--offer .hero__cta { width: 100%; justify-content: center; }
+  .landing-root .landing-section { padding: 40px 0; }
+  .landing-root .trial-offer { padding: 14px; }
+}

@@ -7,9 +7,11 @@ type LandingHeaderProps = {
   nav?: ReactNode;
   /** Optional CTA on the right (defaults to "Войти" link to /). */
   cta?: ReactNode;
+  /** Optional button shown next to the burger on phones, outside the collapsed menu. */
+  mobileCta?: ReactNode;
 };
 
-export const LandingHeader = ({ nav, cta }: LandingHeaderProps) => {
+export const LandingHeader = ({ nav, cta, mobileCta }: LandingHeaderProps) => {
   const [open, setOpen] = useState(false);
 
   return (
@@ -36,6 +38,8 @@ export const LandingHeader = ({ nav, cta }: LandingHeaderProps) => {
             )}
           </div>
         </nav>
+
+        {mobileCta ? <div className="header__mobile-cta">{mobileCta}</div> : null}
 
         <button
           type="button"
