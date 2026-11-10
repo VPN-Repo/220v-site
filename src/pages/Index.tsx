@@ -755,8 +755,8 @@ const Index = () => {
           <div className="container hero__grid">
             <div className="hero__content">
               <h1 className="hero__title">
-                <span className="hero__nowrap">Включитесь</span>{" "}
-                <span className="accent hero__nowrap">на все 220</span>
+                <span className="hero__line">Включитесь</span>{" "}
+                <span className="accent hero__line">На все 220</span>
               </h1>
               <p className="hero__desc">
                 Быстрое защищённое соединение для телефона и компьютера. Все локации, безлимитный трафик*, подключение

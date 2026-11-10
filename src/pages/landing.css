@@ -5546,6 +5546,7 @@ body.landing-no-scroll { overflow: hidden; }
 /* Hero v2: no hyphenation, a rating plate instead of a checklist, the mascot beside the headline on phones. */
 .landing-root .hero--offer .hero__title { hyphens: manual; word-break: normal; overflow-wrap: normal; }
 .landing-root .hero__nowrap { white-space: nowrap; }
+.landing-root .hero__line { display: block; white-space: nowrap; }
 .landing-root .hero__plate {
   display: grid;
   grid-template-columns: repeat(3, auto);
