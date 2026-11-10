@@ -1,6 +1,6 @@
 // Site funnel counters: which steps visitors reach, per day, with no third-party service.
-// The same file is copied unchanged into every brand site (MasterVPN, 220v-site, LetoVPN,
-// PavelVPN); the brand passes its Redis key prefix to installFunnel().
+// The same file is copied unchanged into every brand site (Master, 220v, Leto and Pavel);
+// the brand passes its Redis key prefix to installFunnel().
 //
 // What is stored, per Moscow day: a count per event (Redis hash) and an approximate number of
 // distinct visitors per event (HyperLogLog over a random id the browser keeps in localStorage).
