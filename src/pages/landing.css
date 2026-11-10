@@ -5719,3 +5719,50 @@ body.landing-no-scroll { overflow: hidden; }
   .landing-root .hero__checks { grid-template-columns: 1fr; gap: 9px; }
   .landing-root .hero__checks li { font-size: 15px; }
 }
+
+
+/* Hero A, tuned: bigger headline, smaller mascot on its baseline, plain lime ticks, calm price link. */
+.landing-root .hero__checks li::before,
+.landing-root .hero__checks li::after { content: none; }
+.landing-root .hero__checks li { padding-left: 26px; }
+.landing-root .hero__checks li > .hero__tick {
+  position: absolute;
+  left: 0;
+  top: -1px;
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 18px;
+}
+.landing-root .hero--offer .hero__note--wide {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #cfd3c4;
+}
+.landing-root .hero--offer .hero__price-link {
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--muted-2);
+}
+@media (max-width: 960px) {
+  .landing-root .hero--offer .hero__grid {
+    grid-template-columns: minmax(0, 1fr) 112px;
+    grid-template-areas:
+      "title mascot"
+      "desc desc"
+      "checks checks"
+      "actions actions"
+      "note note"
+      "price price";
+  }
+  .landing-root .hero--offer .hero__title { align-self: end; }
+  .landing-root .hero--offer .hero__visual { align-self: end; margin-right: -8px; }
+  .landing-root .hero--offer .hero__mascot { max-height: 150px; }
+  .landing-root .hero--offer .hero__actions { display: contents; }
+  .landing-root .hero--offer .hero__cta { grid-area: actions; }
+  .landing-root .hero--offer .hero__price-link { grid-area: price; justify-self: center; margin-top: 16px; }
+  .landing-root .hero--offer .hero__note--wide { grid-area: note; text-align: center; }
+}
+@media (max-width: 520px) {
+  .landing-root .hero--offer .hero__title { font-size: clamp(30px, 9.6vw, 40px); }
+  .landing-root .hero--offer .hero__cta { width: 100%; justify-content: center; min-height: 56px; font-size: 17px; font-weight: 700; }
+}

@@ -758,14 +758,26 @@ const Index = () => {
                 <span className="hero__line">Включитесь</span>{" "}
                 <span className="accent hero__line">На все 220</span>
               </h1>
-              <p className="hero__desc">
-                Быстрое защищённое соединение для телефона и компьютера. Подключение через Happ за пару минут.
+              <p className="hero__desc hero__desc--wide">
+                Быстрый защищённый интернет для телефона и компьютера. Настройка за пару минут.
               </p>
               <ul className="hero__checks" role="list">
-                <li>Безлимитный трафик*</li>
-                <li>16 стран</li>
-                <li>До 7 устройств</li>
-                <li>Тест-драйв 6 часов бесплатно</li>
+                <li>
+                  <span className="hero__tick" aria-hidden="true">✓</span>
+                  Безлимитный трафик*
+                </li>
+                <li>
+                  <span className="hero__tick" aria-hidden="true">✓</span>
+                  16 стран
+                </li>
+                <li>
+                  <span className="hero__tick" aria-hidden="true">✓</span>
+                  До 7 устройств
+                </li>
+                <li>
+                  <span className="hero__tick" aria-hidden="true">✓</span>
+                  Поддержка без выходных
+                </li>
               </ul>
               <div className="hero__actions">
                 <button
@@ -779,13 +791,13 @@ const Index = () => {
                   <svg viewBox="0 0 24 24" className="btn__icon" aria-hidden="true">
                     <path d="M13 2 L4 14 h7 l-2 8 l9-12 h-7 l2-8 Z" fill="currentColor" />
                   </svg>
-                  Попробовать бесплатно
+                  Попробовать 6 часов бесплатно
                 </button>
                 <a href="#prices" className="hero__price-link">
                   Тарифы — от {formatRub(cheapestPerMonth(cards))} ₽ в месяц ↓
                 </a>
               </div>
-              <p className="hero__note">Код для входа придёт на почту. Карта не нужна.</p>
+              <p className="hero__note hero__note--wide">Без карты. Код для входа придёт на почту.</p>
             </div>
 
             <div className="hero__visual">
