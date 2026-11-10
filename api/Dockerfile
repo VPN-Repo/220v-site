@@ -13,6 +13,7 @@ RUN apk add --no-cache wget
 COPY --from=deps --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node api/package.json ./package.json
 COPY --chown=node:node api/index.mjs ./index.mjs
+COPY --chown=node:node api/funnel.mjs ./funnel.mjs
 COPY --chown=node:node api/env.mjs ./env.mjs
 COPY --chown=node:node api/config.mjs ./config.mjs
 COPY --chown=node:node api/logger.mjs ./logger.mjs
