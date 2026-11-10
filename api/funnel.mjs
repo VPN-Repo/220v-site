@@ -55,17 +55,13 @@ export function funnelDay(date = new Date()) {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
-/** The browser may send only from our own pages. */
-function sameOrigin(req) {
-  const site = String(req.get("Sec-Fetch-Site") || "").toLowerCase();
-  if (site && site !== "same-origin" && site !== "none") return false;
-  const origin = req.get("Origin");
-  if (!origin) return true;
-  try {
-    return new URL(origin).host === req.get("host");
-  } catch {
-    return false;
-  }
+/**
+ * Drops events another site makes a visitor's browser send. The browser marks those itself
+ * (Sec-Fetch-Site: cross-site). Host/Origin are not compared: the sites sit behind proxies that
+ * may rewrite Host (www vs the bare domain), which silently dropped every event.
+ */
+function fromOurPages(req) {
+  return String(req.get("Sec-Fetch-Site") || "").toLowerCase() !== "cross-site";
 }
 
 let installed = null;
@@ -121,7 +117,7 @@ export function installFunnel(app, { redis, prefix, requireAdminToken, logger, n
     const event = typeof req.body?.e === "string" ? req.body.e : "";
     const visitor = typeof req.body?.v === "string" ? req.body.v : "";
     // Always 204: a page never waits on or retries analytics.
-    if (!EVENT_SET.has(event) || !sameOrigin(req) || limited(req.ip || "?")) return res.status(204).end();
+    if (!EVENT_SET.has(event) || !fromOurPages(req) || limited(req.ip || "?")) return res.status(204).end();
     await record(event, visitor);
     return res.status(204).end();
   });

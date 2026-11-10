@@ -46,14 +46,16 @@ describe("funnel", () => {
     assert.ok(ttl > 90 * 86400 && ttl <= 100 * 86400, String(ttl));
   });
 
-  it("ignores unknown events, bad visitor ids and other sites, always with 204", async () => {
+  it("ignores unknown events, bad visitor ids and other sites, always with 204; proxies may rewrite Host", async () => {
     const app = makeApp("t2");
     await send(app, { e: "drop_table", v: visitor(1) }).expect(204);
     await send(app, { e: "landing_view", v: "user@example.com" }).expect(204);
     await send(app, { e: "landing_view", v: visitor(3) }, { "Sec-Fetch-Site": "cross-site" }).expect(204);
-    await send(app, { e: "landing_view", v: visitor(4) }, { Origin: "https://evil.example" }).expect(204);
+    await send(app, { e: "landing_view", v: visitor(4) }, { "Sec-Fetch-Site": "cross-site", Origin: "https://evil.example" }).expect(204);
+    // Behind a proxy Host may differ from the page's origin (www vs bare domain): still counted.
+    await send(app, { e: "qr_open", v: visitor(5) }, { "Sec-Fetch-Site": "same-site", Origin: "https://www.example.org", Host: "example.org" }).expect(204);
     await send(app, "not json").expect(204);
-    assert.deepEqual(await redis.hgetall(`t2:funnel:${day}`), { landing_view: "1" }, "only the bad-visitor event counts, without a visitor");
+    assert.deepEqual(await redis.hgetall(`t2:funnel:${day}`), { landing_view: "1", qr_open: "1" }, "the bad-visitor event counts without a visitor; cross-site is dropped");
     assert.equal(await redis.pfcount(`t2:funnel:${day}:v:landing_view`), 0);
   });
 
