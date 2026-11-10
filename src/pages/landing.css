@@ -5766,3 +5766,16 @@ body.landing-no-scroll { overflow: hidden; }
   .landing-root .hero--offer .hero__title { font-size: clamp(30px, 9.6vw, 40px); }
   .landing-root .hero--offer .hero__cta { width: 100%; justify-content: center; min-height: 56px; font-size: 17px; font-weight: 700; }
 }
+
+/* Phones: headline and mascot centred against each other (as in the version the owner liked). */
+@media (max-width: 960px) {
+  .landing-root .hero--offer .hero__grid { grid-template-columns: minmax(0, 1fr) minmax(0, 0.62fr); }
+  .landing-root .hero--offer .hero__title { align-self: center; }
+  .landing-root .hero--offer .hero__visual { align-self: center; margin-right: -20px; }
+  .landing-root .hero--offer .hero__mascot { max-height: 230px; }
+}
+@media (max-width: 520px) {
+  .landing-root .hero--offer .hero__title { font-size: clamp(27px, 8.6vw, 34px); }
+  .landing-root .hero--offer .hero__mascot { max-height: 196px; }
+  .landing-root .hero--offer .hero__desc { margin-top: 10px; }
+}
