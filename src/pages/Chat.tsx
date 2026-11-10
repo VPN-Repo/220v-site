@@ -15,6 +15,7 @@ import { getVpnTalkmeProfileRaw } from "@/lib/vpnStorage";
 import LandingFooter from "@/pages/landing/LandingFooter";
 import LandingShell from "@/pages/landing/LandingShell";
 import { lockDocumentScroll } from "@/lib/scrollLock";
+import { track } from "@/lib/funnel";
 
 type ChatAttachmentKind = "image" | "video" | "zip" | "file";
 
@@ -365,6 +366,9 @@ function readTalkMeCustomFields(): ReturnType<typeof buildTalkMeCustomFields> | 
 }
 
 const Chat = () => {
+  useEffect(() => {
+    track("support_open", { once: true });
+  }, []);
   const navigate = useNavigate();
   const { email, items, handleLogout } = useDashboardSidebarItems();
   const [announcement, setAnnouncement] = useState<string | null>(null);

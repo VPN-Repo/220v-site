@@ -96,6 +96,7 @@ import {
   requireSession,
   setSessionCookies,
 } from "./session.mjs";
+import { recordFunnel } from "../funnel.mjs";
 
 /**
  * @param {{ mailer: { sendOtpEmail: (opts: { email: string, code: string, purpose?: "login" | "password_change", provider?: "primary" | "backup" }) => Promise<{ ok: boolean, error?: string, detail?: string, messageId?: string, provider?: string, failover?: boolean }> }, loadUserProfile: (email: string, req: import('express').Request, refUuid?: string, options?: { enrich?: boolean }) => Promise<object>, extractUserUuid: (profile: object) => string | null, isReferralPointsBlocked?: (refUuid: string) => Promise<boolean> }} deps
@@ -267,6 +268,7 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
         "password login ok",
       );
       await recordAuthEvent("login_ok", req, { email, userUuid, status: "ok" });
+      await recordFunnel("login_ok");
       return res.json(profile);
     } catch (err) {
       return serverError(res, req, err);
@@ -368,6 +370,7 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
           },
           "send-code dispatched",
         );
+        await recordFunnel("code_sent");
         await recordAuthEvent("send_code_sent", req, {
           email,
           status: "ok",
@@ -491,6 +494,7 @@ export function createAuthRouter({ mailer, loadUserProfile, extractUserUuid, isR
       "login ok",
     );
     await recordAuthEvent("login_ok", req, { email, userUuid, status: "ok" });
+    await recordFunnel("login_ok");
 
     if (referrerUuid) {
       const refCredit = profile?.referrer_credit || profile?.user?.referrer_credit;

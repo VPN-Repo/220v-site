@@ -13,6 +13,7 @@ import { useDashboardSidebarItems } from "@/hooks/useDashboardSidebarItems";
 import LandingShell from "@/pages/landing/LandingShell";
 import LandingFooter from "@/pages/landing/LandingFooter";
 import { isActivePaidSubscription, subscriptionMsLeft } from "@/lib/lteTraffic";
+import { track } from "@/lib/funnel";
 
 type BillingMeta = {
   payments?: BillingPaymentMethod[];
@@ -107,6 +108,7 @@ const TariffPay = () => {
     if (!userUuid || !productKey) return;
     setPaymentLoading(paymentMethod);
     try {
+      track("checkout_click");
       const { data, error: fnError } = await apiPost<{ payment_url?: string }>("/checkout", {
         product_key: productKey,
         payment_method: paymentMethod,

@@ -1,26 +1,28 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
-import Dashboard from "./pages/Dashboard";
-import PaySuccess from "./pages/PaySuccess";
-import PayFail from "./pages/PayFail";
-import Chat from "./pages/Chat";
-import Policy from "./pages/Policy";
-import Price from "./pages/Price";
-import Tariff from "./pages/Tariff";
-import TariffPay from "./pages/TariffPay";
-import Traffic from "./pages/Traffic";
-import TrafficPay from "./pages/TrafficPay";
-import Instructions from "./pages/Instructions";
-import Referrals from "./pages/Referrals";
-import Terms from "./pages/Terms";
-import UnsubscribeEmail from "./pages/UnsubscribeEmail";
-import NotFound from "./pages/NotFound";
-import AdminRedis from "./pages/AdminRedis";
-import AdminReferrals from "./pages/AdminReferrals";
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const PaySuccess = lazy(() => import("./pages/PaySuccess"));
+const PayFail = lazy(() => import("./pages/PayFail"));
+const Chat = lazy(() => import("./pages/Chat"));
+const Policy = lazy(() => import("./pages/Policy"));
+const Price = lazy(() => import("./pages/Price"));
+const Tariff = lazy(() => import("./pages/Tariff"));
+const TariffPay = lazy(() => import("./pages/TariffPay"));
+const Traffic = lazy(() => import("./pages/Traffic"));
+const TrafficPay = lazy(() => import("./pages/TrafficPay"));
+const Instructions = lazy(() => import("./pages/Instructions"));
+const Referrals = lazy(() => import("./pages/Referrals"));
+const Terms = lazy(() => import("./pages/Terms"));
+const UnsubscribeEmail = lazy(() => import("./pages/UnsubscribeEmail"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const AdminRedis = lazy(() => import("./pages/AdminRedis"));
+const AdminFunnel = lazy(() => import("./pages/AdminFunnel"));
+const AdminReferrals = lazy(() => import("./pages/AdminReferrals"));
 import RequireVpnAuth from "./components/RequireVpnAuth";
 import { PromoProvider } from "./components/PromoProvider";
 import { SessionProvider } from "./hooks/useSession";
@@ -35,6 +37,7 @@ const App = () => (
       <BrowserRouter>
         <SessionProvider>
         <PromoProvider>
+        <Suspense fallback={<div className="min-h-viewport bg-background" />}>
         <Routes>
           <Route path="/" element={<Index />} />
           <Route
@@ -46,6 +49,7 @@ const App = () => (
             }
           />
           <Route path="/admin/redis" element={<AdminRedis />} />
+          <Route path="/admin/funnel" element={<AdminFunnel />} />
           <Route path="/admin/referrals" element={<AdminReferrals />} />
           <Route path="/policy" element={<Policy />} />
           <Route path="/price" element={<Price />} />
@@ -119,6 +123,7 @@ const App = () => (
           <Route path="/pay/fail" element={<PayFail />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
+</Suspense>
         </PromoProvider>
         </SessionProvider>
       </BrowserRouter>

@@ -13,6 +13,7 @@ import {
   subscriptionEndLabel,
   subscriptionMsLeft,
 } from "@/lib/lteTraffic";
+import { track } from "@/lib/funnel";
 
 type BillingMeta = {
   products?: {
@@ -36,6 +37,9 @@ const TRAFFIC_OPTIONS: TrafficOption[] = [
 const formatRub = (value: number) => value.toLocaleString("ru-RU");
 
 const Traffic = () => {
+  useEffect(() => {
+    track("buy_open", { once: true });
+  }, []);
   const navigate = useNavigate();
   const { email, items, handleLogout, userLoading, userError, trafficRestriction, user } = useDashboardSidebarItems();
   const [priceByKey, setPriceByKey] = useState<Record<string, number>>({});

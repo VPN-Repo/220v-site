@@ -48,6 +48,8 @@ import {
 import { SESSION_COOKIE } from "./config.mjs";
 import { base64url, emailHash, maskEmail } from "./auth/crypto.mjs";
 import { createAuthRouter } from "./auth/routes.mjs";
+import { installFunnel, recordFunnel } from "./funnel.mjs";
+import { requireAdminToken as requireFunnelAdmin } from "./auth/session.mjs";
 import { requireSession, getSession, requireAdminToken, updateSessionPromo } from "./auth/session.mjs";
 import { activePromo, createPromoRouter, PROMO_APPLY_FAILED_MESSAGE } from "./promo.mjs";
 import { getCredential } from "./auth/password.mjs";
@@ -94,6 +96,7 @@ app.use(
 app.use(createUnisenderWebhookRouter({ limiter: unisenderWebhookIpLimiter }));
 app.use(express.json({ limit: "16kb" }));
 app.use(cookieParser());
+installFunnel(app, { redis, prefix: "v220:site", requireAdminToken: requireFunnelAdmin, logger });
 app.use(createPromoRouter({ applyDays: requestRmwPromoApply }));
 
 function getBillingAllowedHosts() {
@@ -2262,6 +2265,7 @@ app.post("/api/checkout", requireSession, checkoutSessionLimiter, async (req, re
       req.log.warn({ err }, "Failed to resolve inviter during checkout log");
     }
 
+    await recordFunnel("checkout_created");
     return res.json(data);
   } catch (err) {
     return serverError(res, req, err);

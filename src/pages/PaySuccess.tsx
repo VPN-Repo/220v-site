@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, CheckCircle2, Gift } from "lucide-react";
 
@@ -8,6 +9,7 @@ import LandingShell from "@/pages/landing/LandingShell";
 import ReferralShare from "@/components/ReferralShare";
 import { useSession } from "@/hooks/useSession";
 import { buildReferralLink, useReferralConfig } from "@/lib/referralPromo";
+import { track } from "@/lib/funnel";
 
 export const PAY_SUCCESS_REFERRAL_TITLE = "Довольны соединением? Делитесь ссылкой — баллы за каждую подписку, которую оплатит друг";
 
@@ -38,6 +40,9 @@ const PaySuccessReferral = () => {
 };
 
 const PaySuccess = () => {
+  useEffect(() => {
+    track("pay_success_view", { once: true });
+  }, []);
   const navigate = useNavigate();
 
   return (
