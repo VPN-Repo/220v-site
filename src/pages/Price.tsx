@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 
 import { useTariffCards } from "@/lib/tariffPrices";
-import LandingPlans from "@/pages/landing/LandingPlans";
+import LandingPlans, { PLAN_INCLUDES } from "@/pages/landing/LandingPlans";
 
 import LandingShell from "@/pages/landing/LandingShell";
 import LandingHeader from "@/pages/landing/LandingHeader";
@@ -33,6 +33,7 @@ const Price = () => {
             <p className="price-page__subtitle">Выберите срок — чем дольше, тем выгоднее</p>
           </div>
 
+          <p className="plans-includes">В каждом тарифе: {PLAN_INCLUDES}</p>
           <LandingPlans cards={cards} className="plans--page" onSelect={(months) => navigate(`/tariff/pay?months=${months}`)} />
 
           <p className="price-page__note">

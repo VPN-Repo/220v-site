@@ -5385,51 +5385,7 @@ body.landing-no-scroll { overflow: hidden; }
 /* ---------- Conversion landing (offer hero, steps, prices, FAQ) ---------- */
 .landing-root .header__mobile-cta { display: none; }
 .landing-root .hero--offer .hero__title { margin-bottom: 18px; }
-.landing-root .hero__eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  margin-bottom: 18px;
-  border: 1px solid rgba(198, 255, 61, 0.35);
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent);
-  background: rgba(198, 255, 61, 0.06);
-}
-.landing-root .hero__eyebrow-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 10px var(--accent);
-}
 .landing-root .hero--offer .hero__desc { margin-bottom: 18px; max-width: 480px; }
-.landing-root .hero__points {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0 0 28px;
-}
-.landing-root .hero__points li {
-  position: relative;
-  padding-left: 26px;
-  font-size: 15px;
-  color: var(--muted-2);
-  text-align: left;
-}
-.landing-root .hero__points li::before {
-  content: "";
-  position: absolute;
-  left: 2px;
-  top: 6px;
-  width: 12px;
-  height: 7px;
-  border-left: 2px solid var(--accent);
-  border-bottom: 2px solid var(--accent);
-  transform: rotate(-45deg);
-}
 .landing-root .hero__actions {
   display: flex;
   flex-wrap: wrap;
@@ -5473,32 +5429,6 @@ body.landing-no-scroll { overflow: hidden; }
 }
 .landing-root .container--narrow { max-width: 760px; }
 
-.landing-root .steps {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 18px;
-  margin-top: 24px;
-  list-style: none;
-  padding: 0;
-}
-.landing-root .step {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 22px;
-}
-.landing-root .step__num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #0a0a0a;
-  font-weight: 800;
-  margin-bottom: 12px;
-}
 .landing-root .step__title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
 .landing-root .step__desc { font-size: 14px; color: var(--muted); line-height: 1.5; }
 
@@ -5602,21 +5532,135 @@ body.landing-no-scroll { overflow: hidden; }
   .landing-root .header__mobile-cta { display: block; margin-left: auto; }
   .landing-root .header__mobile-cta + .burger { margin-left: 0; }
   .landing-root .header__mobile-login { padding: 8px 16px; }
-  /* Offer first on phones: text and button above the mascot. */
-  .landing-root .hero--offer .hero__content { order: 1; }
-  .landing-root .hero--offer .hero__visual { order: 2; min-height: 0; }
-  .landing-root .hero--offer .hero__mascot { max-height: 220px; }
-  .landing-root .hero--offer .hero__points { align-items: center; }
-  .landing-root .hero--offer .hero__actions { justify-content: center; }
-  .landing-root .steps { grid-template-columns: 1fr; }
 }
 @media (max-width: 520px) {
   .landing-root .hero--offer { padding-top: 20px; }
-  .landing-root .hero--offer .hero__mascot { max-height: 160px; }
-  .landing-root .hero__eyebrow { font-size: 12px; margin-bottom: 14px; }
-  .landing-root .hero__points li { font-size: 14px; }
-  .landing-root .hero__actions { flex-direction: column; gap: 12px; }
+  .landing-root .hero__actions { flex-direction: column; align-items: stretch; gap: 12px; }
   .landing-root .hero--offer .hero__cta { width: 100%; justify-content: center; }
+  .landing-root .hero__price-link { text-align: center; }
+  .landing-root .hero--offer .hero__note { text-align: center; }
   .landing-root .landing-section { padding: 40px 0; }
   .landing-root .trial-offer { padding: 14px; }
+}
+
+/* Hero v2: no hyphenation, a rating plate instead of a checklist, the mascot beside the headline on phones. */
+.landing-root .hero--offer .hero__title { hyphens: manual; }
+.landing-root .hero__nowrap { white-space: nowrap; }
+.landing-root .hero__plate {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  justify-content: start;
+  margin: 0 0 30px;
+  border: 1px solid rgba(198, 255, 61, 0.45);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.landing-root .hero__plate-cell {
+  padding: 10px 18px 11px;
+  border-right: 1px solid rgba(198, 255, 61, 0.25);
+}
+.landing-root .hero__plate-cell:last-child { border-right: 0; }
+.landing-root .hero__plate dt {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.landing-root .hero__plate dd {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* Steps v2: editorial rows with outlined numerals on a lime rule. */
+.landing-root .steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  margin-top: 28px;
+  list-style: none;
+  padding: 0;
+}
+.landing-root .step {
+  border-top: 2px solid var(--accent);
+  padding-top: 16px;
+}
+.landing-root .step__num {
+  display: block;
+  font-size: 52px;
+  line-height: 1;
+  font-weight: 800;
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--accent);
+  margin-bottom: 12px;
+  letter-spacing: -1px;
+}
+
+@media (max-width: 960px) {
+  /* Phones: headline and mascot share the first row, everything else runs full width below. */
+  .landing-root .hero--offer .hero__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.72fr);
+    grid-template-areas:
+      "title mascot"
+      "desc desc"
+      "plate plate"
+      "actions actions"
+      "note note";
+    column-gap: 4px;
+    row-gap: 0;
+    text-align: left;
+    margin-bottom: 8px;
+  }
+  .landing-root .hero--offer .hero__content { display: contents; }
+  .landing-root .hero--offer .hero__title { grid-area: title; align-self: center; margin: 0; }
+  .landing-root .hero--offer .hero__desc { grid-area: desc; margin: 6px 0 18px; max-width: none; }
+  .landing-root .hero--offer .hero__plate { grid-area: plate; justify-content: stretch; grid-template-columns: 1.35fr 0.75fr 1.1fr; margin-bottom: 20px; }
+  .landing-root .hero--offer .hero__actions { grid-area: actions; justify-content: flex-start; }
+  .landing-root .hero--offer .hero__note { grid-area: note; }
+  .landing-root .hero--offer .hero__visual {
+    grid-area: mascot;
+    order: 0;
+    min-height: 0;
+    align-self: end;
+    justify-content: flex-end;
+    margin-right: -20px;
+  }
+  .landing-root .hero--offer .hero__mascot { max-height: 230px; }
+  .landing-root .hero--offer .hero__mascot-glow { width: 90%; }
+  .landing-root .steps { grid-template-columns: 1fr; gap: 0; }
+  .landing-root .step {
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    column-gap: 14px;
+    border-top: 1px solid var(--border);
+    padding: 18px 0;
+  }
+  .landing-root .step:first-child { border-top: 2px solid var(--accent); }
+  .landing-root .step__num { grid-row: span 2; font-size: 44px; margin: 0; }
+}
+@media (max-width: 520px) {
+  .landing-root .hero--offer .hero__title { font-size: clamp(30px, 9.4vw, 38px); }
+  .landing-root .hero--offer .hero__mascot { max-height: 196px; }
+  .landing-root .hero__plate-cell { padding: 9px 10px 10px; }
+  .landing-root .hero__plate dd { font-size: 15px; }
+  .landing-root .hero__plate dt { font-size: 10px; letter-spacing: 0.8px; }
+}
+
+.landing-root .plans-includes {
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted-2);
+  margin: -12px auto 22px;
+  max-width: 640px;
+}
+.landing-root .plan__saving {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  margin: -8px 0 20px;
 }

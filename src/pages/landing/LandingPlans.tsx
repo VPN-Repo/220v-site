@@ -7,7 +7,8 @@ type LandingPlansProps = {
   className?: string;
 };
 
-const BASE_FEATURES = ["Все локации", "Безлимитный трафик*", "До 7 устройств на аккаунт", "Поддержка ежедневно 05:00–01:00 МСК"];
+/** What every plan includes: said once above the cards instead of repeated in each. */
+export const PLAN_INCLUDES = "все локации · безлимитный трафик* · до 7 устройств · поддержка 05:00–01:00 МСК";
 
 export const LandingPlans = ({ cards, onSelect, className }: LandingPlansProps) => (
   <div className={`plans${className ? ` ${className}` : ""}`}>
@@ -15,10 +16,8 @@ export const LandingPlans = ({ cards, onSelect, className }: LandingPlansProps) 
       const fullPrice = c.price + c.saving;
       return (
         <div key={c.months} className={`plan${c.featured ? " plan--featured" : ""}`} data-testid={`plan-${c.months}`}>
-          {c.featured ? (
-            <span className="plan__badge">Выбор большинства</span>
-          ) : c.discountPercent > 0 ? (
-            <span className="plan__badge plan__badge--alt">−{c.discountPercent}%</span>
+          {c.discountPercent > 0 ? (
+            <span className={`plan__badge${c.featured ? "" : " plan__badge--alt"}`}>−{c.discountPercent}%</span>
           ) : null}
           <div className="plan__head">
             <h3 className="plan__name">{c.label}</h3>
@@ -31,12 +30,7 @@ export const LandingPlans = ({ cards, onSelect, className }: LandingPlansProps) 
           <p className="plan__period">
             {c.months === 1 ? "Чтобы попробовать без долгих решений" : `≈ ${formatRub(c.perMonth)} ₽ в месяц · ${c.perDay} ₽ в день`}
           </p>
-          <ul className="plan__features" role="list">
-            {BASE_FEATURES.map((f) => (
-              <li key={f}>{f}</li>
-            ))}
-            {c.saving > 0 ? <li>Экономия {formatRub(c.saving)} ₽</li> : null}
-          </ul>
+          {c.saving > 0 ? <p className="plan__saving">Экономия {formatRub(c.saving)} ₽</p> : null}
           <button
             type="button"
             className={`btn ${c.featured ? "btn--primary" : "btn--ghost"} btn--wide plan__btn`}

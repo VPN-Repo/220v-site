@@ -39,7 +39,7 @@ import mascot220v from "@/assets/mascot-220v.png";
 import { track } from "@/lib/funnel";
 import { clearPendingLogin, inboxUrlFor, readPendingLogin, savePendingLogin } from "@/lib/pendingLogin";
 import { cheapestPerMonth, formatRub, useTariffCards } from "@/lib/tariffPrices";
-import LandingPlans from "@/pages/landing/LandingPlans";
+import LandingPlans, { PLAN_INCLUDES } from "@/pages/landing/LandingPlans";
 
 /** Совпадает с ключом в Dashboard: отложенный query после входа с deep link */
 const DASHBOARD_PENDING_SEARCH_KEY = "vpn_dashboard_pending_search";
@@ -754,21 +754,28 @@ const Index = () => {
         <section className="hero hero--offer">
           <div className="container hero__grid">
             <div className="hero__content">
-              <p className="hero__eyebrow">
-                <span className="hero__eyebrow-dot" aria-hidden="true" /> Тест-драйв бесплатно · нужен только email
-              </p>
               <h1 className="hero__title">
-                Включите интернет <span className="accent">на все 220</span>
+                Включите <span className="hero__nowrap">интернет</span>{" "}
+                <span className="accent hero__nowrap">на все 220</span>
               </h1>
               <p className="hero__desc">
-                Быстрое и защищённое соединение для телефона и компьютера. Подключение за пару минут через приложение
-                Happ — без настроек.
+                Быстрое защищённое соединение для телефона и компьютера. Все локации, безлимитный трафик*, подключение
+                через Happ за пару минут.
               </p>
-              <ul className="hero__points" role="list">
-                <li>Все локации и безлимитный трафик*</li>
-                <li>До 7 устройств на одном аккаунте</li>
-                <li>Живая поддержка ежедневно 05:00–01:00 МСК</li>
-              </ul>
+              <dl className="hero__plate" aria-label="Коротко о сервисе">
+                <div className="hero__plate-cell">
+                  <dt>Тест-драйв</dt>
+                  <dd>6 ч бесплатно</dd>
+                </div>
+                <div className="hero__plate-cell">
+                  <dt>Устройств</dt>
+                  <dd>до 7</dd>
+                </div>
+                <div className="hero__plate-cell">
+                  <dt>Поддержка</dt>
+                  <dd>05:00–01:00</dd>
+                </div>
+              </dl>
               <div className="hero__actions">
                 <button
                   type="button"
@@ -848,6 +855,7 @@ const Index = () => {
               Тарифы
             </h2>
             <p className="landing-section__subtitle">Чем дольше срок, тем дешевле месяц. Сначала можно бесплатно попробовать.</p>
+            <p className="plans-includes">В каждом тарифе: {PLAN_INCLUDES}</p>
             <LandingPlans cards={cards} onSelect={handleSelectTariff} />
             <p className="price-page__note">
               * Безлимит на всех локациях, кроме серверов «Мобильная сеть» — там 35 ГБ в месяц. Подробнее — в{" "}
