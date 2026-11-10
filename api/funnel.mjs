@@ -2,11 +2,12 @@
 // The same file is copied unchanged into every brand site (Master, 220v, Leto and Pavel);
 // the brand passes its Redis key prefix to installFunnel().
 //
-// What is stored, per Moscow day: a count per event (Redis hash) and an approximate number of
+// What is stored, per Moscow day: a count per event (Redis hash), the same count split into phones
+// and computers (two more hashes, from the browser's own guess), and an approximate number of
 // distinct visitors per event (HyperLogLog over a random id the browser keeps in localStorage).
 // No email, no IP, no user agent, no page URL. Keys expire after 100 days.
 //
-//   POST /api/events          { e: "<event>", v: "<visitor id>" }   → 204 (browser, same origin)
+//   POST /api/events          { e, v: "<visitor id>", d: "m" | "d" }  → 204 (browser; d = phone/computer)
 //   GET  /api/admin/funnel    ?days=14                               → admin token, per-day table
 //   recordFunnel("<event>")   server-side steps (code sent, login, checkout), from any module
 
@@ -38,6 +39,8 @@ export const FUNNEL_EVENTS = [
 
 const EVENT_SET = new Set(FUNNEL_EVENTS);
 const VISITOR_RE = /^[A-Za-z0-9_-]{16,64}$/;
+/** Device kinds the browser may report: m = phone or tablet, d = computer. */
+const DEVICES = new Set(["m", "d"]);
 const TTL_SEC = 100 * 24 * 60 * 60;
 const MAX_DAYS = 60;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -78,6 +81,7 @@ export function recordFunnel(event, visitor) {
 export function installFunnel(app, { redis, prefix, requireAdminToken, logger, now = () => new Date() }) {
   const countKey = (day) => `${prefix}:funnel:${day}`;
   const visitorsKey = (day, event) => `${prefix}:funnel:${day}:v:${event}`;
+  const deviceKey = (day, device) => `${prefix}:funnel:${day}:d:${device}`;
   // Per-IP limit in memory only: the address is never written anywhere.
   const hits = new Map();
   const sweep = setInterval(() => {
@@ -97,11 +101,13 @@ export function installFunnel(app, { redis, prefix, requireAdminToken, logger, n
     return entry.count > RATE.max;
   }
 
-  async function record(event, visitor) {
+  async function record(event, visitor, device) {
     if (!EVENT_SET.has(event)) return;
     const day = funnelDay(now());
     try {
-      await redis.multi().hincrby(countKey(day), event, 1).expire(countKey(day), TTL_SEC).exec();
+      const tx = redis.multi().hincrby(countKey(day), event, 1).expire(countKey(day), TTL_SEC);
+      if (DEVICES.has(device)) tx.hincrby(deviceKey(day, device), event, 1).expire(deviceKey(day, device), TTL_SEC);
+      await tx.exec();
       // Separate from the count: a failure here never loses the count itself.
       if (visitor && VISITOR_RE.test(visitor)) {
         await redis.pfadd(visitorsKey(day, event), visitor);
@@ -116,9 +122,10 @@ export function installFunnel(app, { redis, prefix, requireAdminToken, logger, n
     res.set("Cache-Control", "no-store");
     const event = typeof req.body?.e === "string" ? req.body.e : "";
     const visitor = typeof req.body?.v === "string" ? req.body.v : "";
+    const device = typeof req.body?.d === "string" ? req.body.d : "";
     // Always 204: a page never waits on or retries analytics.
     if (!EVENT_SET.has(event) || !fromOurPages(req) || limited(req.ip || "?")) return res.status(204).end();
-    await record(event, visitor);
+    await record(event, visitor, device);
     return res.status(204).end();
   });
 
@@ -137,6 +144,8 @@ export function installFunnel(app, { redis, prefix, requireAdminToken, logger, n
         const rows = [];
         for (const day of list) {
           const counts = (await redis.hgetall(countKey(day))) || {};
+          const phones = (await redis.hgetall(deviceKey(day, "m"))) || {};
+          const computers = (await redis.hgetall(deviceKey(day, "d"))) || {};
           const visitors = {};
           await Promise.all(
             FUNNEL_EVENTS.map(async (event) => {
@@ -144,7 +153,14 @@ export function installFunnel(app, { redis, prefix, requireAdminToken, logger, n
             }),
           );
           const events = {};
-          for (const event of FUNNEL_EVENTS) events[event] = { count: Number(counts[event]) || 0, visitors: visitors[event] };
+          for (const event of FUNNEL_EVENTS) {
+            events[event] = {
+              count: Number(counts[event]) || 0,
+              visitors: visitors[event],
+              phone: Number(phones[event]) || 0,
+              desktop: Number(computers[event]) || 0,
+            };
+          }
           rows.push({ day, events });
         }
         return res.json({ events: FUNNEL_EVENTS, days: rows });

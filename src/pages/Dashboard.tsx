@@ -59,6 +59,7 @@ import LandingShell from "@/pages/landing/LandingShell";
 import LandingFooter from "@/pages/landing/LandingFooter";
 import ReferralPromoStrip from "@/components/ReferralPromoStrip";
 import PasswordNudge from "@/components/PasswordNudge";
+import ConnectWizard from "@/components/ConnectWizard";
 import { isPasswordNudgeDismissed } from "@/lib/passwordNudge";
 import DashboardSidebar, { type DashboardSidebarItem } from "@/components/DashboardSidebar";
 import PasswordDialog from "@/components/PasswordDialog";
@@ -242,6 +243,15 @@ const Dashboard = () => {
   // false, пока /me не ответил: до ответа плашку пароля не показываем, чтобы не мигала.
   const [passwordKnown, setPasswordKnown] = useState(false);
   const [passwordNudgeHidden, setPasswordNudgeHidden] = useState(isPasswordNudgeDismissed);
+  // First-device card: hidden for this tab once closed; stays on its done screen.
+  const [wizardHidden, setWizardHidden] = useState(() => {
+    try {
+      return sessionStorage.getItem("connect_wizard_hidden") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [wizardDone, setWizardDone] = useState(false);
   const [revokeOpen, setRevokeOpen] = useState(false);
   const copySubscriptionButtonRef = useRef<HTMLButtonElement>(null);
   const autoPromoAttemptRef = useRef("");
@@ -833,6 +843,17 @@ const Dashboard = () => {
       : []),
   ];
 
+  const showConnectWizard =
+    !wizardHidden && !isExpired && Boolean(resolveSubscriptionUrl()) && ((userData?.currentDevices ?? 0) === 0 || wizardDone);
+  const hideConnectWizard = () => {
+    setWizardHidden(true);
+    try {
+      sessionStorage.setItem("connect_wizard_hidden", "1");
+    } catch {
+      // Hidden for this page view only.
+    }
+  };
+
   if (loading) {
     return (
       <LandingShell className="landing-root--with-sidebar landing-root--dashboard">
@@ -931,7 +952,18 @@ const Dashboard = () => {
               </span>
             </header>
 
-            {passwordKnown && !hasPassword && !passwordNudgeHidden ? (
+            {/* One hint at a time: the first device comes before the password and the referral. */}
+            {showConnectWizard ? (
+              <ConnectWizard
+                subscriptionUrl={resolveSubscriptionUrl()}
+                onConnected={(total) => {
+                  setWizardDone(true);
+                  setUserData((prev) => (prev ? { ...prev, currentDevices: total } : prev));
+                }}
+                onOtherDevice={() => navigate("/instructions")}
+                onClose={hideConnectWizard}
+              />
+            ) : passwordKnown && !hasPassword && !passwordNudgeHidden ? (
               <PasswordNudge
                 onSetPassword={() => setPasswordDialogOpen(true)}
                 onDismiss={() => setPasswordNudgeHidden(true)}

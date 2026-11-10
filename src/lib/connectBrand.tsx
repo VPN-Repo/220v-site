@@ -1,0 +1,67 @@
+// 220v copy, colours and Happ links for the first-device card (components/ConnectWizard).
+// Voice: «ты», short, with the 220v current-and-power wording.
+import { happSubscriptionLink, oneClickHappSubscriptionUrl } from "@/lib/happ";
+import SubscriptionQr from "@/components/SubscriptionQr";
+import type { ConnectBrand } from "@/components/ConnectWizard";
+
+export const CONNECT_BRAND: ConnectBrand = {
+  // The add link and the QR carry the backup subscription host (see lib/happ).
+  addLink: oneClickHappSubscriptionUrl,
+  qrValue: happSubscriptionLink,
+  Qr: ({ value, alt }) => <SubscriptionQr value={value} alt={alt} />,
+  actionClass: "bg-primary text-primary-foreground hover:bg-primary/90",
+  doneBoxClass: "bg-primary/10 ring-primary/50",
+  doneIconClass: "bg-primary text-primary-foreground",
+  copy: {
+    titleFirst: "Подключи первое устройство",
+    titlePhone: "Подключаем телефон",
+    titleComputer: "Подключаем компьютер",
+    titleThis: {
+      iphone: "Подключаем твой iPhone",
+      ipad: "Подключаем твой iPad",
+      mac: "Подключаем твой Mac",
+      android: "Подключаем твой телефон",
+      windows: "Подключаем твой компьютер",
+      linux: "Подключаем твой компьютер",
+    },
+    subtitle: "Линия под напряжением — осталось воткнуть вилку. Пара минут.",
+    thisComputer: "Этот компьютер",
+    phone: "Телефон",
+    computer: "Компьютер",
+    stepInstall: "1. Поставь приложение Happ",
+    appleNote: "Happ лежит в App Store Казахстана.",
+    appleNoteLink: "Как переключить регион",
+    installButton: {
+      ios: "Взять Happ в App Store",
+      mac: "Взять Happ в App Store",
+      android: "Скачать Happ для Android",
+      windows: "Скачать Happ для Windows",
+      linux: "Скачать Happ для Linux (.deb)",
+    },
+    androidWarning: "Браузер может ругнуться на файл — жми «Всё равно скачать», открой файл и разреши установку.",
+    androidMirror: "Не качается? Все сборки Happ",
+    alreadyInstalled: "Happ уже стоит →",
+    downloaded: "Happ скачивается",
+    back: "Назад",
+    stepAdd: "2. Подай подписку в Happ",
+    addButton: "Подключить подписку в один тап",
+    notInstalledBack: "Happ не встал? Вернуться к шагу 1",
+    sent: "Подписка ушла в Happ",
+    notOpened: "Happ не запустился?",
+    retry: "Ещё раз",
+    install: "Поставить Happ",
+    phoneStepInstall: "1. Поставь Happ на телефон",
+    phoneIphone: "Happ в App Store, регион — «Казахстан»",
+    phoneIphoneLink: "как переключить",
+    phoneAndroid: "открой в браузере телефона files-hub.com/?p=android и скачай Happ.",
+    phoneStepScan: "2. В Happ жми «+» и сканируй код",
+    qrAlt: "QR-код подписки 220v",
+    computerFromPhone: "Открой этот сайт на компьютере и зайди в кабинет с той же почтой — там будет кнопка подключения.",
+    waiting: "Как только Happ возьмёт подписку, тут загорится «Готово».",
+    otherDevice: "Другое устройство",
+    tvAndOthers: "Телевизор и всё остальное — подробная инструкция",
+    done: "Есть контакт! Подписка в Happ.",
+    close: "Закрыть",
+    hide: "Скрыть подсказку",
+  },
+};

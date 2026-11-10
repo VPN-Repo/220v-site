@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 
 const TOKEN_STORAGE_KEY = "admin_redis_token";
 
-type Row = { day: string; events: Record<string, { count: number; visitors: number }> };
+type Mode = "visitors" | "count" | "phone" | "desktop";
+type Row = { day: string; events: Record<string, Record<Mode, number>> };
 
 const LABELS: Record<string, string> = {
   landing_view: "Открыли лендинг",
@@ -40,7 +41,7 @@ const AdminFunnel = () => {
   const [days, setDays] = useState(14);
   const [events, setEvents] = useState<string[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
-  const [mode, setMode] = useState<"visitors" | "count">("visitors");
+  const [mode, setMode] = useState<Mode>("visitors");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -91,9 +92,11 @@ const AdminFunnel = () => {
               </option>
             ))}
           </select>
-          <select value={mode} onChange={(e) => setMode(e.target.value as "visitors" | "count")} style={{ padding: 8, borderRadius: 8 }}>
+          <select value={mode} onChange={(e) => setMode(e.target.value as Mode)} style={{ padding: 8, borderRadius: 8 }}>
             <option value="visitors">Посетители</option>
             <option value="count">События</option>
+            <option value="phone">События с телефонов</option>
+            <option value="desktop">События с компьютеров</option>
           </select>
           <button type="button" onClick={() => void load()} disabled={loading} style={{ padding: "8px 16px", borderRadius: 8 }}>
             {loading ? "Загрузка…" : "Обновить"}
@@ -102,7 +105,7 @@ const AdminFunnel = () => {
         {error && <p style={{ color: "#dc2626" }}>{error}</p>}
         {mode === "visitors" && (
           <p style={{ fontSize: 13, color: "#64748b", marginTop: 0 }}>
-            Посетители считаются по случайному идентификатору браузера, приблизительно. Шаги входа и счёта считаются на сервере, только как события.
+            Посетители считаются по случайному идентификатору браузера, приблизительно. Шаги входа и счёта считаются на сервере, только как события, и не делятся на телефоны и компьютеры.
           </p>
         )}
         {rows.length > 0 && (

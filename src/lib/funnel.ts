@@ -1,6 +1,6 @@
 // Site funnel events (see api/funnel.mjs). The same file is copied unchanged into every brand site.
-// The browser keeps a random visitor id in localStorage so the server can count distinct visitors;
-// nothing else about the visitor is sent.
+// The browser keeps a random visitor id in localStorage so the server can count distinct visitors,
+// and says whether it is a phone or a computer; nothing else about the visitor is sent.
 
 export type FunnelEvent =
   | "landing_view"
@@ -42,6 +42,17 @@ function visitorId(): string {
   }
 }
 
+/** "m": a phone or tablet, "d": a computer. */
+function deviceKind(): "m" | "d" {
+  try {
+    const ua = navigator.userAgent;
+    const iPadAsMac = navigator.platform === "MacIntel" && (navigator.maxTouchPoints ?? 0) > 1;
+    return /iPhone|iPad|iPod|Android/i.test(ua) || iPadAsMac ? "m" : "d";
+  } catch {
+    return "d";
+  }
+}
+
 /**
  * Sends one funnel event. Never throws and never blocks the page.
  * `once`: send it at most once per page load (screen views re-rendered by React).
@@ -52,7 +63,7 @@ export function track(event: FunnelEvent, { once = false }: { once?: boolean } =
       if (sentOnce.has(event)) return;
       sentOnce.add(event);
     }
-    const body = JSON.stringify({ e: event, v: visitorId() });
+    const body = JSON.stringify({ e: event, v: visitorId(), d: deviceKind() });
     const blob = new Blob([body], { type: "application/json" });
     if (typeof navigator !== "undefined" && navigator.sendBeacon?.("/api/events", blob)) return;
     void fetch("/api/events", {

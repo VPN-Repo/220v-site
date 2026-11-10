@@ -59,6 +59,19 @@ describe("funnel", () => {
     assert.equal(await redis.pfcount(`t2:funnel:${day}:v:landing_view`), 0);
   });
 
+  it("splits browser events into phones and computers", async () => {
+    const app = makeApp("t6");
+    await send(app, { e: "add_click", v: visitor(1), d: "m" });
+    await send(app, { e: "add_click", v: visitor(2), d: "m" });
+    await send(app, { e: "add_click", v: visitor(3), d: "d" });
+    await send(app, { e: "add_click", v: visitor(4), d: "tv" });
+    assert.equal(await redis.hget(`t6:funnel:${day}`, "add_click"), "4");
+    assert.equal(await redis.hget(`t6:funnel:${day}:d:m`, "add_click"), "2");
+    assert.equal(await redis.hget(`t6:funnel:${day}:d:d`, "add_click"), "1");
+    const res = await request(app).get("/api/admin/funnel?days=1").set("X-Admin-Token", TOKEN).expect(200);
+    assert.deepEqual(res.body.days[0].events.add_click, { count: 4, visitors: 4, phone: 2, desktop: 1 });
+  });
+
   it("limits one address to 60 events a minute", async () => {
     const app = makeApp("t3");
     for (let i = 0; i < 70; i += 1) await send(app, { e: "qr_open", v: visitor(i) }, { "X-Forwarded-For": "198.51.100.7" });
@@ -81,7 +94,7 @@ describe("funnel", () => {
     assert.deepEqual(res.body.events, FUNNEL_EVENTS);
     assert.equal(res.body.days.length, 3);
     assert.equal(res.body.days[0].day, day);
-    assert.deepEqual(res.body.days[0].events.buy_open, { count: 1, visitors: 1 });
+    assert.deepEqual(res.body.days[0].events.buy_open, { count: 1, visitors: 1, phone: 0, desktop: 0 });
     assert.equal(res.headers["cache-control"], "no-store");
   });
 });
