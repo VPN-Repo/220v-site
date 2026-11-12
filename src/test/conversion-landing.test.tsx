@@ -80,6 +80,24 @@ describe("selling landing", () => {
     fireEvent.click(await within(await screen.findByTestId("plan-6")).findByRole("button", { name: "Выбрать 6 месяцев" }));
     expect(await screen.findByLabelText("Email")).toBeInTheDocument();
     expect(track).toHaveBeenCalledWith("plan_select");
+    expect(screen.getByRole("heading", { name: "Тариф на 6 месяцев" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ivan@gmail.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить к оплате" }));
+    expect(await screen.findByRole("heading", { name: "Введите код" })).toBeInTheDocument();
+    expect(track).toHaveBeenCalledWith("login_submit_plan");
+  });
+
+  it("the free test button opens the login about the 6 hours and counts typing once", async () => {
+    renderLanding();
+    fireEvent.click((await screen.findAllByRole("button", { name: /Попробовать 6 часов бесплатно/ }))[0]);
+    expect(await screen.findByRole("heading", { name: "Ваши 6 часов ждут" })).toBeInTheDocument();
+    expect(screen.getByText("Без спама: почта нужна только для входа в аккаунт")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "i" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ivan@gmail.com" } });
+    expect(vi.mocked(track).mock.calls.filter(([e]) => e === "login_email_input")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Получить 6 часов" }));
+    expect(await screen.findByRole("heading", { name: "Введите код" })).toBeInTheDocument();
+    expect(track).toHaveBeenCalledWith("login_submit_trial");
   });
 
   it("the code screen comes back after a reload within 10 minutes", async () => {
@@ -114,8 +132,10 @@ describe("selling landing", () => {
     renderLanding();
     fireEvent.click(await screen.findByRole("button", { name: "Войти" }));
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ivan@gmail.com" } });
+    expect(screen.getByRole("heading", { name: "Вход в 220v" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Продолжить" }));
     expect(await screen.findByRole("heading", { name: "Введите код" })).toBeInTheDocument();
+    expect(track).toHaveBeenCalledWith("login_submit_login");
     expect(screen.getByRole("button", { name: /Повторная отправка через 20 сек/ })).toBeDisabled();
     expect(readPendingLogin()?.email).toBe("ivan@gmail.com");
   });

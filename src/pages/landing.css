@@ -4936,6 +4936,12 @@ body.landing-no-scroll { overflow: hidden; }
 @media (pointer: coarse) {
   .landing-root .login-card .login-typo-hint button { padding: 6px 12px; }
 }
+.landing-root .login-card .login-email-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted-2);
+}
 .landing-root .login-card .login-typo-hint--code {
   margin: -14px 0 18px;
   text-align: center;

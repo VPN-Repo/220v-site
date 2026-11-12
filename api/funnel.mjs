@@ -24,6 +24,10 @@ export const FUNNEL_EVENTS = [
   "faq_open",
   "code_screen_restored",
   "mail_open_click",
+  "login_email_input",
+  "login_submit_trial",
+  "login_submit_plan",
+  "login_submit_login",
   // Login (server side)
   "code_sent",
   "login_ok",

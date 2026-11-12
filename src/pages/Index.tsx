@@ -114,6 +114,34 @@ async function getBrowserFingerprint(): Promise<string> {
 }
 
 type LoginStep = "email" | "password" | "verify";
+/** Why the login window opened: the email step speaks to that reason. */
+type LoginSource = { kind: "trial" } | { kind: "plan"; months: number } | { kind: "login" };
+
+function pluralMonths(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "месяц";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "месяца";
+  return "месяцев";
+}
+
+function emailStepCopy(source: LoginSource): { title: string; subtitle: string; button: string } {
+  if (source.kind === "trial") {
+    return {
+      title: "Ваши 6 часов ждут",
+      subtitle: "Укажите почту: пришлём код, и бесплатный доступ включится сразу",
+      button: "Получить 6 часов",
+    };
+  }
+  if (source.kind === "plan") {
+    return {
+      title: `Тариф на ${source.months} ${pluralMonths(source.months)}`,
+      subtitle: "Укажите почту: пришлём код для входа, затем перейдём к оплате",
+      button: "Продолжить к оплате",
+    };
+  }
+  return { title: "Вход в 220v", subtitle: "Пришлём на почту код и ссылку для входа", button: "Продолжить" };
+}
 
 /** A known delivery problem for the address (Unisender bounce), shown on the code screen. */
 type DeliveryWarning = { category: string; message: string };
@@ -210,6 +238,10 @@ const Index = () => {
   // The typo hint shows once typing pauses or the field loses focus; it never blocks sending.
   const [emailSettled, setEmailSettled] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [loginSource, setLoginSource] = useState<LoginSource>({ kind: "login" });
+  const emailCopy = emailStepCopy(loginSource);
+  // Funnel: the first keystroke in the email field is sent once per opening of the login window.
+  const emailTypedRef = useRef(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resendCooldownSec, setResendCooldownSec] = useState(0);
@@ -425,8 +457,10 @@ const Index = () => {
     setLoginStep("email");
   };
 
-  const openLogin = () => {
+  const openLogin = (source: LoginSource = { kind: "login" }) => {
     track("login_open");
+    setLoginSource(source);
+    emailTypedRef.current = false;
     setLoginStep("email");
     setCode("");
     resetPasswordFields();
@@ -445,7 +479,7 @@ const Index = () => {
   const handleSelectTariff = (months: number) => {
     track("plan_select");
     setVpnPendingRedirect(`/tariff/pay?months=${months}`);
-    openLogin();
+    openLogin({ kind: "plan", months });
   };
 
   const closeLogin = () => {
@@ -562,6 +596,7 @@ const Index = () => {
       return;
     }
 
+    track(`login_submit_${loginSource.kind}` as const);
     sendingRef.current = true;
     setLoading(true);
     let accountHasPassword = false;
@@ -785,7 +820,7 @@ const Index = () => {
                   className="btn btn--primary btn--lg hero__cta"
                   onClick={() => {
                     track("landing_cta");
-                    openLogin();
+                    openLogin({ kind: "trial" });
                   }}
                 >
                   <svg viewBox="0 0 24 24" className="btn__icon" aria-hidden="true">
@@ -843,7 +878,7 @@ const Index = () => {
                 className="btn btn--primary btn--lg"
                 onClick={() => {
                   track("landing_cta");
-                  openLogin();
+                  openLogin({ kind: "trial" });
                 }}
               >
                 Начать тест-драйв
@@ -895,7 +930,7 @@ const Index = () => {
                 className="btn btn--primary btn--lg"
                 onClick={() => {
                   track("landing_cta");
-                  openLogin();
+                  openLogin({ kind: "trial" });
                 }}
               >
                 Попробовать бесплатно
@@ -952,10 +987,10 @@ const Index = () => {
       <LandingModal
         open={loginOpen}
         onClose={closeLogin}
-        title={loginStep === "email" ? "Вход в 220v" : loginStep === "password" ? "Введите пароль" : "Введите код"}
+        title={loginStep === "email" ? emailCopy.title : loginStep === "password" ? "Введите пароль" : "Введите код"}
         subtitle={
           loginStep === "email"
-            ? "Пришлём на почту код и ссылку для входа"
+            ? emailCopy.subtitle
             : loginStep === "password"
               ? `Пароль для ${normalizedEmail}`
               : (
@@ -988,6 +1023,10 @@ const Index = () => {
                 onChange={(e) => {
                   setEmail(e.target.value);
                   setEmailSettled(false);
+                  if (!emailTypedRef.current) {
+                    emailTypedRef.current = true;
+                    track("login_email_input");
+                  }
                 }}
                 onBlur={() => setEmailSettled(true)}
                 onKeyDown={(e) => {
@@ -1003,6 +1042,7 @@ const Index = () => {
                   className="login-typo-hint"
                 />
               ) : null}
+              <p className="login-email-note">Без спама: почта нужна только для входа в аккаунт</p>
             </div>
             <div className="form-actions">
               <button
@@ -1011,7 +1051,7 @@ const Index = () => {
                 onClick={() => void handleStart()}
                 disabled={loading}
               >
-                {loading ? "Отправка..." : "Продолжить"}
+                {loading ? "Отправка..." : emailCopy.button}
               </button>
             </div>
           </div>
