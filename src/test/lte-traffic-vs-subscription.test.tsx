@@ -146,7 +146,7 @@ describe("LTE traffic vs subscription renewal", () => {
       renderAt("/traffic");
       fireEvent.click(await screen.findByRole("button", { name: "Продлить подписку" }));
       expect(await screen.findByRole("heading", { level: 1, name: "Продление подписки" })).toBeInTheDocument();
-      expect(screen.getByText("Что вы получите: +1/6/12 мес. доступа")).toBeInTheDocument();
+      expect(screen.getByText("Оплаченные месяцы прибавятся к вашей текущей подписке")).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "6 месяцев" })).toBeInTheDocument();
     });
 
@@ -203,7 +203,7 @@ describe("LTE traffic vs subscription renewal", () => {
       mockApi(10 * day);
       renderAt("/tariff/pay?months=6");
       expect(await screen.findByRole("heading", { level: 1, name: "Продление подписки" })).toBeInTheDocument();
-      expect(await screen.findByText("Подписка на 6 месяцев — 999 ₽. Что вы получите: +6 мес. доступа")).toBeInTheDocument();
+      expect(await screen.findByText("Подписка на 6 месяцев — 999 ₽. Месяцы прибавятся к вашей текущей подписке")).toBeInTheDocument();
     });
   });
 

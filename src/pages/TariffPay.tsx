@@ -162,7 +162,7 @@ const TariffPay = () => {
                 {productKey
                   ? `Подписка на ${MONTHS_LABEL[months]}${
                       price != null ? ` — ${price.toLocaleString("ru-RU")} ₽` : ""
-                    }${isRenewal ? `. Что вы получите: +${months} мес. доступа` : ""}`
+                    }${isRenewal ? ". Месяцы прибавятся к вашей текущей подписке" : ""}`
                   : "Тариф не выбран"}
               </p>
             </div>

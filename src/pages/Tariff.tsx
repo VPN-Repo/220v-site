@@ -44,7 +44,7 @@ const Tariff = () => {
               <h1 className="price-page__title price-page__title--mobile-hidden">{title}</h1>
               <p className="price-page__subtitle">
                 {isRenewal
-                  ? "Что вы получите: +1/6/12 мес. доступа"
+                  ? "Оплаченные месяцы прибавятся к вашей текущей подписке"
                   : "Выберите срок подписки — чем дольше, тем выгоднее"}
               </p>
             </div>
